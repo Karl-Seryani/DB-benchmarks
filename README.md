@@ -71,7 +71,7 @@ python generate_datasets.py --size full --format csv
 ## Team Members
 - Karl Seryani - 251-304-976
 - Arik Dhaliwal - 251-289-250
-- Raghav Gulati - [ID]
+- Raghav Gulati - 251-328-012
 
 ## Next Steps
 1. ✅ Generate small test dataset
