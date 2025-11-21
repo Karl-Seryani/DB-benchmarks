@@ -1,5 +1,4 @@
 # Sensitive configuration
-config.env
 
 # Python
 __pycache__/
