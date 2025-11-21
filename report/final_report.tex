@@ -226,13 +226,40 @@ Elasticsearch Cloud & 27.97 MB & 13.3x larger \\ \bottomrule
 
 \textbf{Analysis:} The compression advantage is consistent across all tables, validating ClickHouse's columnar storage benefits. This translates directly to reduced storage costs and improved I/O performance.
 
-\subsection{Query Performance}
+\subsection{Real-World Benchmark: NYC Taxi Data}
 
-We implemented seven benchmark tests, each run 5 times for statistical validity (3 times for concurrent load test):
+To validate our findings on a larger, non-synthetic dataset, we benchmarked the NYC Yellow Taxi dataset (January 2024, approx. 3 million rows).
+
+\subsubsection{Data Loading Performance}
+\begin{itemize}
+    \item \textbf{ClickHouse:} 35.46 seconds (83,602 rows/sec)
+    \item \textbf{Elasticsearch:} 301.92 seconds (9,819 rows/sec)
+\end{itemize}
+\textbf{Finding:} ClickHouse ingested data \textbf{8.5x faster} than Elasticsearch. This confirms ClickHouse's superior write performance for bulk analytics data.
+
+\subsubsection{Query Performance (3 Million Rows)}
+\begin{table}[h]
+\centering
+\caption{NYC Taxi Benchmark Results (milliseconds)}
+\label{tab:nyc_performance}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Query Type} & \textbf{ClickHouse} & \textbf{Elasticsearch} \\ \midrule
+Avg Fare by Passenger & 157ms & 134ms \\
+Long Trips Count ($>$10 miles) & 101ms & 53ms \\
+Top 10 Pickup Zones & 112ms & 70ms \\ \bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Analysis:} Elasticsearch maintained a performance lead (1.2x-1.9x faster) for these simple aggregations. However, ClickHouse's performance improved dramatically after the first "cold" run (e.g., 415ms $\rightarrow$ 88ms), indicating strong caching mechanisms. The network latency floor (~80ms for ClickHouse) continues to be a significant factor in total execution time for these sub-second queries.
+
+\subsection{Query Performance Summary}
+
+We implemented seven benchmark tests on synthetic data and three on real-world data.
 
 \begin{table}[h]
 \centering
-\caption{Query Performance Comparison (milliseconds)}
+\caption{Synthetic Data Performance Comparison (milliseconds)}
 \label{tab:performance}
 \begin{tabular}{@{}lll@{}}
 \toprule
