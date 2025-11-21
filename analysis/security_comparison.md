@@ -7,7 +7,7 @@
 
 ---
 
-## Executive Summary
+##  Executive Summary
 
 Both ClickHouse Cloud and Elasticsearch Cloud provide enterprise-grade security features suitable for healthcare and regulated industries. Both offer encryption, role-based access control, and audit logging. The main differences lie in implementation approach and ecosystem integration.
 
