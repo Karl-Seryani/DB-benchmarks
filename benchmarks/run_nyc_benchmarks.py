@@ -1,6 +1,6 @@
 """
 Benchmark Suite: ClickHouse vs Elasticsearch
-Tests query performance on NYC Taxi dataset (3 Million Rows)
+Tests query performance on NYC Taxi dataset (12 Million Rows - Jan-Apr 2024)
 Same 7 benchmarks as healthcare data for consistent comparison
 """
 
@@ -19,7 +19,7 @@ load_dotenv("../config.env")
 # Results storage
 results = {
     "test_date": datetime.now().isoformat(),
-    "dataset": "NYC Taxi (3M rows)",
+    "dataset": "NYC Taxi (12M rows)",
     "benchmarks": []
 }
 
@@ -97,6 +97,34 @@ def benchmark_elasticsearch(name, index, query_body, runs=5):
         "runs": runs,
         "result_count": result['hits']['total']['value'] if 'hits' in result else 0
     }
+
+def check_dataset_sizes():
+    """Print the number of rows/docs in each system"""
+    print("\n" + "="*60)
+    print("  DATASET SIZE CHECK")
+    print("="*60)
+    
+    # ClickHouse count
+    try:
+        ch_client = get_clickhouse_client()
+        ch_count = ch_client.execute("SELECT COUNT(*) FROM healthcare_benchmark.nyc_taxi")[0][0]
+        print(f"ClickHouse:    {ch_count:,} rows")
+    except Exception as e:
+        print(f"ClickHouse:    Error ({e})")
+        ch_count = 0
+
+    # Elasticsearch count
+    try:
+        es = get_elasticsearch_client()
+        es_count = es.count(index="nyc_taxi")['count']
+        print(f"Elasticsearch: {es_count:,} docs")
+    except Exception as e:
+        print(f"Elasticsearch: Error ({e})")
+        es_count = 0
+        
+    print("="*60 + "\n")
+    return ch_count, es_count
+
 
 # ============================================================
 # BENCHMARK 1: Simple Aggregation (COUNT + AVG)
@@ -593,6 +621,8 @@ def main():
     print("  CLICKHOUSE VS ELASTICSEARCH BENCHMARK SUITE")
     print("  NYC Taxi Analytics Performance Comparison (3M rows)")
     print("="*60)
+    
+    check_dataset_sizes()
 
     try:
         benchmark_1_simple_aggregation()

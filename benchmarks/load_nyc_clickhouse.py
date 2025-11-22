@@ -54,33 +54,47 @@ def load_nyc_data_clickhouse():
     """
     client.execute(create_table_query)
     
-    print("Loading Parquet file into ClickHouse...")
+    print("Loading Parquet files into ClickHouse...")
     start_time = time.time()
+    total_rows = 0
     
-    # Read Parquet file using pandas
-    parquet_file = "../data/datasets/nyc_taxi_jan_2024.parquet"
-    df = pd.read_parquet(parquet_file)
+    # Get all parquet files
+    import glob
+    parquet_files = sorted(glob.glob("../data/datasets/nyc_taxi_2024_*.parquet"))
     
-    # Handle NaN values (ClickHouse doesn't like NaNs in Int columns)
-    df = df.fillna(0)
-    
-    # Convert timestamps to datetime objects (pandas read_parquet already does this, but ensure they are native python datetime)
-    df['tpep_pickup_datetime'] = df['tpep_pickup_datetime'].dt.to_pydatetime()
-    df['tpep_dropoff_datetime'] = df['tpep_dropoff_datetime'].dt.to_pydatetime()
-    
-    # Ensure store_and_fwd_flag is string
-    df['store_and_fwd_flag'] = df['store_and_fwd_flag'].astype(str)
-    
-    # Insert data
-    data = df.to_dict('records')
-    client.execute("INSERT INTO healthcare_benchmark.nyc_taxi VALUES", data)
+    if not parquet_files:
+        print("❌ No parquet files found in ../data/datasets/")
+        return
+
+    print(f"Found {len(parquet_files)} files to load: {[os.path.basename(f) for f in parquet_files]}")
+
+    for parquet_file in parquet_files:
+        print(f"Processing {os.path.basename(parquet_file)}...")
+        df = pd.read_parquet(parquet_file)
+        
+        # Handle NaN values (ClickHouse doesn't like NaNs in Int columns)
+        df = df.fillna(0)
+        
+        # Convert timestamps to datetime objects
+        df['tpep_pickup_datetime'] = df['tpep_pickup_datetime'].dt.to_pydatetime()
+        df['tpep_dropoff_datetime'] = df['tpep_dropoff_datetime'].dt.to_pydatetime()
+        
+        # Ensure store_and_fwd_flag is string
+        df['store_and_fwd_flag'] = df['store_and_fwd_flag'].astype(str)
+        
+        # Insert data
+        data = df.to_dict('records')
+        client.execute("INSERT INTO healthcare_benchmark.nyc_taxi VALUES", data)
+        
+        rows = len(df)
+        total_rows += rows
+        print(f"  ✓ Loaded {rows:,} rows")
     
     end_time = time.time()
     duration = end_time - start_time
-    row_count = len(df)
     
-    print(f"✅ Loaded {row_count:,} rows into ClickHouse in {duration:.2f} seconds")
-    print(f"Speed: {row_count / duration:.0f} rows/sec")
+    print(f"✅ Loaded TOTAL {total_rows:,} rows into ClickHouse in {duration:.2f} seconds")
+    print(f"Speed: {total_rows / duration:.0f} rows/sec")
 
 if __name__ == "__main__":
     load_nyc_data_clickhouse()

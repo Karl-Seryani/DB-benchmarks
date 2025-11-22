@@ -69,20 +69,21 @@ def load_nyc_data_elasticsearch():
     
     es.indices.create(index=index_name, body=mapping)
     
-    print("Loading Parquet file into Elasticsearch (this may take a while)...")
+    print("Loading Parquet files into Elasticsearch (this may take a while)...")
     start_time = time.time()
+    total_success = 0
+    total_failed = 0
     
-    # Read Parquet file
-    parquet_file = "../data/datasets/nyc_taxi_jan_2024.parquet"
-    df = pd.read_parquet(parquet_file)
+    # Get all parquet files
+    import glob
+    parquet_files = sorted(glob.glob("../data/datasets/nyc_taxi_2024_*.parquet"))
     
-    # Handle NaNs
-    df = df.fillna(0)
-    
-    # Convert timestamps to ISO format strings
-    df['tpep_pickup_datetime'] = df['tpep_pickup_datetime'].dt.strftime('%Y-%m-%dT%H:%M:%S')
-    df['tpep_dropoff_datetime'] = df['tpep_dropoff_datetime'].dt.strftime('%Y-%m-%dT%H:%M:%S')
-    
+    if not parquet_files:
+        print("❌ No parquet files found in ../data/datasets/")
+        return
+
+    print(f"Found {len(parquet_files)} files to load: {[os.path.basename(f) for f in parquet_files]}")
+
     # Prepare generator for bulk indexing
     def generate_actions(df):
         for _, row in df.iterrows():
@@ -91,9 +92,23 @@ def load_nyc_data_elasticsearch():
                 "_index": index_name,
                 "_source": doc
             }
-    
-    # Bulk load
-    success, failed = helpers.bulk(es, generate_actions(df), chunk_size=5000, stats_only=True)
+
+    for parquet_file in parquet_files:
+        print(f"Processing {os.path.basename(parquet_file)}...")
+        df = pd.read_parquet(parquet_file)
+        
+        # Handle NaNs
+        df = df.fillna(0)
+        
+        # Convert timestamps to ISO format strings
+        df['tpep_pickup_datetime'] = df['tpep_pickup_datetime'].dt.strftime('%Y-%m-%dT%H:%M:%S')
+        df['tpep_dropoff_datetime'] = df['tpep_dropoff_datetime'].dt.strftime('%Y-%m-%dT%H:%M:%S')
+        
+        # Bulk load
+        success, failed = helpers.bulk(es, generate_actions(df), chunk_size=5000, stats_only=True)
+        total_success += success
+        total_failed += failed
+        print(f"  ✓ Loaded {success:,} docs (Failed: {failed})")
     
     # Force refresh to make documents visible
     es.indices.refresh(index=index_name)
@@ -101,10 +116,10 @@ def load_nyc_data_elasticsearch():
     end_time = time.time()
     duration = end_time - start_time
     
-    print(f"✅ Loaded {success:,} documents into Elasticsearch in {duration:.2f} seconds")
-    if failed:
-        print(f"⚠️ Failed to load {failed} documents")
-    print(f"Speed: {success / duration:.0f} docs/sec")
+    print(f"✅ Loaded TOTAL {total_success:,} documents into Elasticsearch in {duration:.2f} seconds")
+    if total_failed:
+        print(f"⚠️ Failed to load {total_failed} documents")
+    print(f"Speed: {total_success / duration:.0f} docs/sec")
 
 if __name__ == "__main__":
     load_nyc_data_elasticsearch()

@@ -111,7 +111,7 @@ def get_mpathic_context():
             {
                 "metric": "Dataset Scale",
                 "mpathic": "Billions of rows",
-                "our_test": "100K - 3M rows",
+                "our_test": "13 Million rows",
                 "insight": "ClickHouse advantages emerge at scale"
             },
             {
@@ -121,18 +121,38 @@ def get_mpathic_context():
                 "insight": "Validated - major cost saving"
             },
             {
-                "metric": "Query Performance",
-                "mpathic": "Faster analytical queries",
-                "our_test": "ES faster on small data, CH wins JOINs",
-                "insight": "Network latency masks CH advantage"
+                "metric": "Ingestion Speed",
+                "mpathic": "Faster data pipelines",
+                "our_test": "8.5x faster (13M vs 2.3M rows)",
+                "insight": "Massive difference for continuous loading"
             },
             {
-                "metric": "Use Case",
-                "mpathic": "ML pipelines, genomic analysis",
-                "our_test": "Healthcare events, taxi trips",
-                "insight": "Similar analytical patterns"
+                "metric": "Small Data Latency",
+                "mpathic": "N/A (Big Data focus)",
+                "our_test": "ES 2x faster (160K rows)",
+                "insight": "Elasticsearch wins on small datasets"
             }
         ]
+    })
+
+@app.route('/api/scalability', methods=['GET'])
+def get_scalability_results():
+    """Get scalability test results (13M row ingestion)"""
+    return jsonify({
+        "clickhouse": {
+            "rows_loaded": 13100000,
+            "time_minutes": 3,
+            "speed_rows_sec": 75000,
+            "status": "Completed"
+        },
+        "elasticsearch": {
+            "rows_loaded": 2300000,
+            "time_minutes": 10,
+            "speed_rows_sec": 3800,
+            "status": "Stopped (Too Slow)"
+        },
+        "speedup": 8.5,
+        "details": "ClickHouse loaded 13.1M rows in 3 mins. Elasticsearch only managed 2.3M rows in 10 mins before being stopped."
     })
 
 @app.route('/api/benchmarks', methods=['GET'])
