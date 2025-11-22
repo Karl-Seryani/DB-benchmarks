@@ -1,4 +1,4 @@
-import clickhouse_driver
+from clickhouse_driver import Client as ClickHouseClient
 from elasticsearch import Elasticsearch
 import time
 import os
@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 load_dotenv("../config.env")
 
 def get_clickhouse_client():
-    return clickhouse_driver.Client(
+    return ClickHouseClient(
         host=os.getenv("CLICKHOUSE_HOST"),
         port=int(os.getenv("CLICKHOUSE_PORT")),
         user=os.getenv("CLICKHOUSE_USER"),

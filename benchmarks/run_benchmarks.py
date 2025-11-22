@@ -9,6 +9,10 @@ import json
 from datetime import datetime
 from clickhouse_driver import Client as ClickHouseClient
 from elasticsearch import Elasticsearch
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv("../config.env")
 
 # Results storage
 results = {
