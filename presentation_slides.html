@@ -1,14 +1,63 @@
 <!doctype html>
 <html lang="en">
+
 <head>
     <meta charset="utf-8">
     <title>ClickHouse vs Elasticsearch - Database Systems Project</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/reset.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/reveal.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/theme/dracula.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/monokai.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/theme/black.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/github-dark.min.css">
+    <style>
+        /* GitHub Dark Mode Custom Styles */
+        :root {
+            --gh-bg: #0d1117;
+            --gh-surface: #161b22;
+            --gh-text: #c9d1d9;
+            --gh-text-dim: #8b949e;
+            --gh-border: #30363d;
+            --ch-color: #f97316;
+            --es-color: #14b8a6;
+        }
+
+        .reveal {
+            background: var(--gh-bg);
+            color: var(--gh-text);
+        }
+
+        .reveal h1,
+        .reveal h2,
+        .reveal h3 {
+            color: var(--gh-text);
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .reveal table {
+            background: var(--gh-surface);
+            border: 1px solid var(--gh-border);
+        }
+
+        .reveal table th {
+            background: var(--gh-surface);
+            color: var(--gh-text);
+            border-bottom: 2px solid var(--gh-border);
+        }
+
+        .reveal table td {
+            border: 1px solid var(--gh-border);
+        }
+
+        .reveal strong {
+            color: var(--ch-color);
+        }
+
+        .reveal small {
+            color: var(--gh-text-dim);
+        }
+    </style>
 </head>
+
 <body>
     <div class="reveal">
         <div class="slides">
@@ -20,7 +69,7 @@
                 <p>
                     <small>Created by Karl Seryani & Team</small>
                 </p>
-                <p style="font-size: 0.6em; color: #bd93f9;">Database Systems II - Fall 2025</p>
+                <p style="font-size: 0.6em; color: #14b8a6;">Database Systems II - Fall 2025</p>
             </section>
 
             <!-- Slide 2: The Problem -->
@@ -30,7 +79,8 @@
                 <ul>
                     <li class="fragment">We need to store <strong>billions</strong> of records.</li>
                     <li class="fragment">We need to query them in <strong>milliseconds</strong>.</li>
-                    <li class="fragment"><strong>The Question:</strong> Do we use a Search Engine (Elasticsearch) or a Columnar Store (ClickHouse)?</li>
+                    <li class="fragment"><strong>The Question:</strong> Do we use a Search Engine (Elasticsearch) or a
+                        Columnar Store (ClickHouse)?</li>
                 </ul>
                 <aside class="notes">
                     Speaker: Karl
@@ -43,7 +93,7 @@
                 <h2>The Contenders</h2>
                 <div style="display: flex; justify-content: space-around;">
                     <div style="width: 45%;">
-                        <h3 style="color: #ff79c6;">Elasticsearch</h3>
+                        <h3 style="color: #14b8a6;">Elasticsearch</h3>
                         <ul>
                             <li><strong>Type:</strong> Search Engine (NoSQL)</li>
                             <li><strong>Core:</strong> Inverted Index</li>
@@ -51,7 +101,7 @@
                         </ul>
                     </div>
                     <div style="width: 45%;">
-                        <h3 style="color: #f1fa8c;">ClickHouse</h3>
+                        <h3 style="color: #f97316;">ClickHouse</h3>
                         <ul>
                             <li><strong>Type:</strong> OLAP DBMS (SQL)</li>
                             <li><strong>Core:</strong> Columnar Storage</li>
@@ -84,11 +134,11 @@
             <!-- Slide 5: Finding #1 - Storage -->
             <section>
                 <h2>Finding #1: Storage Efficiency</h2>
-                <h1 style="color: #50fa7b;">13.3x</h1>
+                <h1 style="color: #f97316;">13.3x</h1>
                 <h3>More Efficient</h3>
                 <p>ClickHouse compressed 100K rows to <strong>2MB</strong>.</p>
                 <p>Elasticsearch needed <strong>28MB</strong>.</p>
-                <p class="fragment" style="color: #ff5555;">Winner: ClickHouse 🏆</p>
+                <p class="fragment" style="color: #f97316;">Winner: ClickHouse 🏆</p>
             </section>
 
             <!-- Slide 6: Finding #2 - Simple Queries -->
@@ -107,12 +157,12 @@
                         <tr>
                             <td>Simple Count</td>
                             <td>98ms</td>
-                            <td style="color: #50fa7b;">53ms</td>
+                            <td style="color: #14b8a6;">53ms</td>
                         </tr>
                         <tr>
                             <td>Filter + Agg</td>
                             <td>99ms</td>
-                            <td style="color: #50fa7b;">52ms</td>
+                            <td style="color: #14b8a6;">52ms</td>
                         </tr>
                     </tbody>
                 </table>
@@ -135,13 +185,14 @@
                     <tbody>
                         <tr>
                             <td>JOIN (Patients + Events)</td>
-                            <td style="color: #50fa7b;">102ms</td>
+                            <td style="color: #f97316;">102ms</td>
                             <td>262ms</td>
                         </tr>
                     </tbody>
                 </table>
                 <p class="fragment">ClickHouse is <strong>2.6x Faster</strong>.</p>
-                <p class="fragment"><small>Elasticsearch doesn't do native JOINs; we had to simulate it (slow).</small></p>
+                <p class="fragment"><small>Elasticsearch doesn't do native JOINs; we had to simulate it (slow).</small>
+                </p>
             </section>
 
             <!-- Slide 8: Finding #4 - Network Latency -->
@@ -153,8 +204,10 @@
                     <li>ClickHouse Cloud: <strong>~80ms</strong></li>
                     <li>Elasticsearch Cloud: <strong>~53ms</strong></li>
                 </ul>
-                <div class="fragment" style="background: #44475a; padding: 20px; border-radius: 10px; margin-top: 20px;">
-                    <p><strong>Insight:</strong> For fast queries (under 100ms), the <strong>network</strong> takes up 50-80% of the time!</p>
+                <div class="fragment"
+                    style="background: #161b22; padding: 20px; border-radius: 10px; margin-top: 20px; border: 1px solid #30363d;">
+                    <p><strong>Insight:</strong> For fast queries (under 100ms), the <strong>network</strong> takes up
+                        50-80% of the time!</p>
                 </div>
             </section>
 
@@ -167,7 +220,7 @@
                         <h4>Ingestion Speed</h4>
                         <p>ClickHouse: <strong>35s</strong> 🚀</p>
                         <p>Elasticsearch: <strong>301s</strong></p>
-                        <p style="color: #50fa7b;">8.5x Faster</p>
+                        <p style="color: #f97316;">8.5x Faster</p>
                     </div>
                     <div class="fragment">
                         <h4>Query Speed</h4>
@@ -181,10 +234,13 @@
             <section>
                 <h2>The Verdict</h2>
                 <ul>
-                    <li class="fragment"><strong>Use Elasticsearch if:</strong> You need text search, simple lookups, or have small, unstructured data.</li>
-                    <li class="fragment"><strong>Use ClickHouse if:</strong> You have massive data (TB/PB), need complex analytics (JOINs), or want to save 90% on storage costs.</li>
+                    <li class="fragment"><strong>Use Elasticsearch if:</strong> You need text search, simple lookups, or
+                        have small, unstructured data.</li>
+                    <li class="fragment"><strong>Use ClickHouse if:</strong> You have massive data (TB/PB), need complex
+                        analytics (JOINs), or want to save 90% on storage costs.</li>
                 </ul>
-                <h3 class="fragment" style="margin-top: 40px; color: #8be9fd;">We validated the mpathic case study. ✅</h3>
+                <h3 class="fragment" style="margin-top: 40px; color: #14b8a6;">We validated the mpathic case study. ✅
+                </h3>
             </section>
 
             <!-- Slide 11: Q&A -->
@@ -201,12 +257,14 @@
     <script>
         Reveal.initialize({
             hash: true,
-            plugins: [ RevealHighlight ],
+            plugins: [RevealHighlight],
             controls: true,
             progress: true,
             center: true,
-            transition: 'slide' // none/fade/slide/convex/concave/zoom
+            transition: 'fade', // none/fade/slide/convex/concave/zoom
+            transitionSpeed: 'slow'
         });
     </script>
 </body>
+
 </html>

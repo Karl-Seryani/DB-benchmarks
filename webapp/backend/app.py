@@ -200,5 +200,57 @@ def get_network_latency():
         "impact": "For sub-100ms queries, network latency is 50-80% of total time"
     })
 
+@app.route('/api/demo/query', methods=['POST'])
+def run_demo_query():
+    """Run a demo query comparison (simulated results)"""
+    from flask import request
+    import random
+
+    query_index = request.json.get('query_index', 0)
+
+    # Simulated results based on actual benchmark data for all 7 queries
+    simulated_results = [
+        # Simple Aggregation
+        {
+            "clickhouse": {"time_ms": 88 + random.uniform(-10, 10), "row_count": 10},
+            "elasticsearch": {"time_ms": 47 + random.uniform(-5, 5), "row_count": 10}
+        },
+        # Multi-Level GROUP BY
+        {
+            "clickhouse": {"time_ms": 92 + random.uniform(-10, 10), "row_count": 45},
+            "elasticsearch": {"time_ms": 61 + random.uniform(-5, 5), "row_count": 45}
+        },
+        # Time-Series
+        {
+            "clickhouse": {"time_ms": 80 + random.uniform(-10, 10), "row_count": 365},
+            "elasticsearch": {"time_ms": 55 + random.uniform(-5, 5), "row_count": 365}
+        },
+        # Filter + Aggregate
+        {
+            "clickhouse": {"time_ms": 84 + random.uniform(-10, 10), "row_count": 8},
+            "elasticsearch": {"time_ms": 44 + random.uniform(-5, 5), "row_count": 8}
+        },
+        # JOIN Performance
+        {
+            "clickhouse": {"time_ms": 99 + random.uniform(-10, 10), "row_count": 10000},
+            "elasticsearch": {"time_ms": 226 + random.uniform(-15, 15), "row_count": 10000}
+        },
+        # Complex Analytical
+        {
+            "clickhouse": {"time_ms": 105 + random.uniform(-10, 10), "row_count": 6},
+            "elasticsearch": {"time_ms": 178 + random.uniform(-10, 10), "row_count": 6}
+        },
+        # Concurrent Load
+        {
+            "clickhouse": {"time_ms": 376 + random.uniform(-20, 20), "row_count": 10},
+            "elasticsearch": {"time_ms": 219 + random.uniform(-15, 15), "row_count": 10}
+        }
+    ]
+
+    if query_index < len(simulated_results):
+        return jsonify(simulated_results[query_index])
+    else:
+        return jsonify({"error": "Invalid query index"}), 400
+
 if __name__ == '__main__':
     app.run(debug=True, port=5002)
