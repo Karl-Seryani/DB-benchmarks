@@ -631,11 +631,33 @@ def main():
         print("\n" + "="*60)
         print("  BENCHMARK SUMMARY")
         print("="*60)
-        print(f"\n📊 Benchmark results show Elasticsearch performed better on this small dataset")
-        print(f"📊 Network latency (CH: ~80ms, ES: ~53ms) was a significant factor")
-        print(f"📊 Storage efficiency: ClickHouse 13.3x better (main finding)")
-        print(f"📊 Worst speedup: {min(speedups):.1f}x")
-        
+
+        # Print comparison table
+        print(f"\n{'Benchmark':<30} | {'ClickHouse (ms)':<15} | {'Elasticsearch (ms)':<18} | {'Winner':<15}")
+        print("-" * 85)
+
+        benchmarks = [
+            "Simple Aggregation",
+            "Multi-Level GROUP BY",
+            "Time-Series Aggregation",
+            "Filter + Aggregation",
+            "JOIN Performance",
+            "Complex Analytical Query",
+            "Concurrent Load"
+        ]
+
+        for b in benchmarks:
+            ch = next((r for r in results["benchmarks"] if r['system'] == "ClickHouse" and r['benchmark'] == b), None)
+            es = next((r for r in results["benchmarks"] if r['system'] == "Elasticsearch" and r['benchmark'] == b), None)
+
+            if ch and es:
+                if ch['avg_ms'] < es['avg_ms']:
+                    winner = f"CH ({es['avg_ms']/ch['avg_ms']:.1f}x)"
+                else:
+                    winner = f"ES ({ch['avg_ms']/es['avg_ms']:.1f}x)"
+
+                print(f"{b:<30} | {ch['avg_ms']:<15} | {es['avg_ms']:<18} | {winner:<15}")
+
         # Save results
         with open('../results/benchmark_results.json', 'w') as f:
             json.dump(results, f, indent=2)
