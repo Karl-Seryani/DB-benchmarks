@@ -98,7 +98,6 @@ function App() {
 
   const pages = [
     'intro',
-    'agenda',
     'mpathic',
     'mpathic-benefits',
     'architecture',
