@@ -25,7 +25,7 @@ sleep 2
 # Start Frontend
 echo -e "${BLUE}Starting Frontend (React + Vite)...${NC}"
 cd ../frontend
-npm run dev &
+npm start &
 FRONTEND_PID=$!
 echo -e "${GREEN}✓ Frontend started (PID: $FRONTEND_PID)${NC}"
 echo ""
