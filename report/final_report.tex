@@ -24,7 +24,7 @@
 \IEEEauthorblockA{\textit{Student ID: 251-289-250}}
 \and
 \IEEEauthorblockN{Raghav Gulati}
-\IEEEauthorblockA{\textit{Student ID: TBD}}
+\IEEEauthorblockA{\textit{Student ID: 251-328-012}}
 }
 
 \maketitle
@@ -148,8 +148,8 @@ This redundancy enables fast search but increases storage requirements significa
 
 \subsubsection{Cloud Infrastructure}
 \begin{itemize}
-    \item \textbf{ClickHouse Cloud:} Version 25.8.1, us-east-1 region, Development tier
-    \item \textbf{Elasticsearch Cloud:} Version 9.2.1, us-east-1 region, Standard tier
+    \item \textbf{ClickHouse Cloud:} Version 25.10.2.65, us-east-1 region, Development tier
+    \item \textbf{Elasticsearch Cloud:} Version 7.17.4, us-east-1 region, Standard tier
     \item Both systems tested in managed cloud environments for fair comparison
 \end{itemize}
 
@@ -244,18 +244,24 @@ To validate our findings on a larger, non-synthetic dataset, we benchmarked the 
 \label{tab:nyc_performance}
 \begin{tabular}{@{}lll@{}}
 \toprule
-\textbf{Query Type} & \textbf{ClickHouse} & \textbf{Elasticsearch} \\ \midrule
-Avg Fare by Passenger & 157ms & 134ms \\
-Long Trips Count ($>$10 miles) & 101ms & 53ms \\
-Top 10 Pickup Zones & 112ms & 70ms \\ \bottomrule
+\textbf{Benchmark} & \textbf{ClickHouse} & \textbf{Elasticsearch} \\ \midrule
+Simple Aggregation & 110ms & 62ms \\
+Multi-Level GROUP BY & 108ms & 51ms \\
+\textbf{Time-Series} & \textbf{105ms} & \textbf{127ms} \\
+Filter + Aggregation & 113ms & 49ms \\
+JOIN Performance & 121ms & 93ms \\
+Complex Analytical & 143ms & 68ms \\
+Concurrent Load & 239ms & 174ms \\ \bottomrule
 \end{tabular}
 \end{table}
 
-\textbf{Analysis:} Elasticsearch maintained a performance lead (1.2x-1.9x faster) for these simple aggregations. However, ClickHouse's performance improved dramatically after the first "cold" run (e.g., 415ms $\rightarrow$ 88ms), indicating strong caching mechanisms. The network latency floor (~80ms for ClickHouse) continues to be a significant factor in total execution time for these sub-second queries.
+\textbf{Key Finding:} On the larger NYC taxi dataset (3M rows), Elasticsearch maintained faster performance on 6 of 7 benchmarks (1.3-2.3x faster). However, ClickHouse won the Time-Series Aggregation benchmark (1.2x faster), demonstrating its strength in date-based analytical queries.
+
+\textbf{Analysis:} The NYC taxi results show similar patterns to the synthetic data, with Elasticsearch performing better on simple aggregations due to network latency advantages. ClickHouse's win on Time-Series queries highlights its optimization for date-partitioned analytical workloads, which is particularly relevant for time-series data like taxi trips.
 
 \subsection{Query Performance Summary}
 
-We implemented seven benchmark tests on synthetic data and three on real-world data.
+We implemented the same seven benchmark tests on both synthetic healthcare data and real-world NYC taxi data.
 
 \begin{table}[h]
 \centering
@@ -264,25 +270,25 @@ We implemented seven benchmark tests on synthetic data and three on real-world d
 \begin{tabular}{@{}lll@{}}
 \toprule
 \textbf{Benchmark} & \textbf{ClickHouse} & \textbf{Elasticsearch} \\ \midrule
-Simple Aggregation & 98ms & 53ms \\
-Multi-Level GROUP BY & 104ms & 57ms \\
-Time-Series & 98ms & 69ms \\
-Filter + Aggregation & 99ms & 52ms \\
-\textbf{JOIN Performance} & \textbf{102ms} & \textbf{262ms} \\
-Complex Analytical & 104ms & 62ms \\
-Concurrent Load (5 queries) & 241ms & 158ms \\ \bottomrule
+Simple Aggregation & 88ms & 47ms \\
+Multi-Level GROUP BY & 87ms & 53ms \\
+Time-Series & 80ms & 55ms \\
+Filter + Aggregation & 84ms & 44ms \\
+\textbf{JOIN Performance} & \textbf{88ms} & \textbf{207ms} \\
+Complex Analytical & 93ms & 45ms \\
+Concurrent Load (5 queries) & 165ms & 115ms \\ \bottomrule
 \end{tabular}
 \end{table}
 
-\textbf{Key Finding:} Elasticsearch demonstrated faster query performance on 6 of 7 benchmarks for this small dataset (1.4-1.9x faster). However, ClickHouse showed a significant advantage (2.6x faster) on JOIN operations.
+\textbf{Key Finding:} Elasticsearch demonstrated faster query performance on 6 of 7 benchmarks for this small dataset (1.4-2.1x faster). However, ClickHouse showed a significant advantage (2.3x faster) on JOIN operations.
 
 \subsubsection{Performance Analysis by Benchmark Type}
 
-\textbf{Aggregation Queries (Benchmarks 1-4, 6):} Elasticsearch consistently outperformed ClickHouse, with query times 52-69ms vs 98-104ms (1.4-1.9x faster).
+\textbf{Aggregation Queries (Benchmarks 1-4, 6):} Elasticsearch consistently outperformed ClickHouse, with query times 44-55ms vs 80-93ms (1.4-2.1x faster).
 
-\textbf{JOIN Operations (Benchmark 5):} ClickHouse demonstrated native SQL JOIN support with 102ms execution time. Elasticsearch required application-side JOIN simulation (two separate queries), resulting in 262ms execution time. \textbf{ClickHouse was 2.6x faster}, highlighting a key architectural advantage.
+\textbf{JOIN Operations (Benchmark 5):} ClickHouse demonstrated native SQL JOIN support with 88ms execution time. Elasticsearch required application-side JOIN simulation (two separate queries), resulting in 207ms execution time. \textbf{ClickHouse was 2.3x faster}, highlighting a key architectural advantage.
 
-\textbf{Concurrent Workload (Benchmark 7):} Testing with 5 simultaneous queries showed Elasticsearch handling concurrent load better (158ms vs 241ms).
+\textbf{Concurrent Workload (Benchmark 7):} Testing with 5 simultaneous queries showed Elasticsearch handling concurrent load better (115ms vs 165ms).
 
 \subsubsection{Context and Interpretation}
 
