@@ -22,14 +22,14 @@ def load_nyc_data_clickhouse():
     print("Creating ClickHouse table for NYC Taxi data...")
     
     # Create database if not exists
-    client.execute("CREATE DATABASE IF NOT EXISTS healthcare_benchmark")
+    client.execute("CREATE DATABASE IF NOT EXISTS nyc_taxi")
     
     # Drop table if exists
-    client.execute("DROP TABLE IF EXISTS healthcare_benchmark.nyc_taxi")
+    client.execute("DROP TABLE IF EXISTS nyc_taxi.trips")
     
     # Create table schema optimized for analytics
     create_table_query = """
-    CREATE TABLE healthcare_benchmark.nyc_taxi (
+    CREATE TABLE nyc_taxi.trips (
         VendorID Int32,
         tpep_pickup_datetime DateTime,
         tpep_dropoff_datetime DateTime,
@@ -84,7 +84,7 @@ def load_nyc_data_clickhouse():
         
         # Insert data
         data = df.to_dict('records')
-        client.execute("INSERT INTO healthcare_benchmark.nyc_taxi VALUES", data)
+        client.execute("INSERT INTO nyc_taxi.trips VALUES", data)
         
         rows = len(df)
         total_rows += rows

@@ -5,6 +5,8 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer
 } from 'recharts';
+import LiveQueryDemo from './components/LiveQueryDemo';
+import StorageDemo from './components/StorageDemo';
 import './App.css';
 
 const API_URL = 'http://localhost:5002/api';
@@ -83,7 +85,6 @@ const BENCHMARK_INFO: Record<string, { title: string; description: string; sql: 
 };
 
 function App() {
-
   const [currentPage, setCurrentPage] = useState(0);
   const [syntheticData, setSyntheticData] = useState<any>(null);
   const [nycData, setNycData] = useState<any>(null);
@@ -94,20 +95,18 @@ function App() {
 
 
 
-  // Scale Lab State
-  const [scaleRows, setScaleRows] = useState(10000000); // Start at 10M
-  const [scaleQuery, setScaleQuery] = useState('aggregation');
 
   const pages = [
     'intro',
     'mpathic',
     'architecture',
     'storage',
+    'live-storage-demo',
     'healthcare-intro',
     'healthcare-summary',
+    'live-query-demo',
     'nyc-intro',
     'nyc-scalability',
-    'nyc-scalelab',
     'nyc-summary',
     'comparison',
     'takeaways',
@@ -453,202 +452,6 @@ function App() {
 
 
 
-  // Calculate simulated metrics
-  const calculateMetrics = (rows: number, type: string) => {
-    // Baselines (extrapolated from our 13M row test)
-    const millions = rows / 1000000;
-
-    let chTime = 0;
-    let esTime = 0;
-    let chCost = 0;
-    let esCost = 0;
-    let chStorage = 0;
-    let esStorage = 0;
-
-    // Storage (Linear)
-    // ES: ~175MB per 1M rows
-    // CH: ~13MB per 1M rows (13.3x compression)
-    esStorage = millions * 0.175; // GB
-    chStorage = millions * 0.013; // GB
-
-    // Cost (Storage + Compute estimate)
-    esCost = esStorage * 0.10 + (millions * 0.05); // Expensive RAM
-    chCost = chStorage * 0.02 + (millions * 0.01); // Cheap object storage
-
-    // Query Performance Extrapolation
-    if (type === 'aggregation') {
-      // ES is good at aggs, linear scaling
-      esTime = 50 + (millions * 5);
-      // CH is faster at scale
-      chTime = 80 + (millions * 0.5);
-    } else if (type === 'join') {
-      // ES dies at scale with joins (app-side)
-      esTime = 100 + (millions * 50);
-      if (millions > 50) esTime *= 2; // Exponential penalty
-      // CH handles joins well
-      chTime = 100 + (millions * 2);
-    } else if (type === 'text') {
-      // ES wins text search
-      esTime = 20 + (millions * 1);
-      chTime = 100 + (millions * 10);
-    } else if (type === 'time-series') {
-      // CH excels at time-series (date partitioning)
-      esTime = 60 + (millions * 4);
-      chTime = 40 + (millions * 0.2);
-    } else if (type === 'concurrent') {
-      // Concurrent load (5x)
-      esTime = (50 + (millions * 5)) * 1.5; // Degradation under load
-      chTime = (80 + (millions * 0.5)) * 1.1; // Better concurrency
-    }
-
-    return { chTime, esTime, chCost, esCost, chStorage, esStorage };
-  };
-
-  const renderScaleLab = () => {
-    const metrics = calculateMetrics(scaleRows, scaleQuery);
-
-    return (
-      <motion.div className="page scale-lab-page" variants={staggerContainer} initial="initial" animate="animate">
-        <motion.h2 variants={fadeInUp}>The Scale Lab</motion.h2>
-        <motion.p variants={fadeInUp} className="page-subtitle">Simulate performance at 1 Billion Rows</motion.p>
-
-        <motion.div variants={fadeInUp} className="lab-controls">
-          <div className="control-group">
-            <label>Dataset Size: <strong>{(scaleRows / 1000000).toFixed(0)} Million Rows</strong></label>
-            <input
-              type="range"
-              min="10000000"
-              max="1000000000"
-              step="10000000"
-              value={scaleRows}
-              onChange={(e) => setScaleRows(parseInt(e.target.value))}
-              className="slider"
-            />
-            <div className="scale-markers">
-              <span>10M</span>
-              <span>250M</span>
-              <span>500M</span>
-              <span>750M</span>
-              <span>1B+</span>
-            </div>
-          </div>
-
-          <div className="control-group">
-            <label>Query Type</label>
-            <div className="toggle-group">
-              <button
-                className={scaleQuery === 'aggregation' ? 'active' : ''}
-                onClick={() => setScaleQuery('aggregation')}
-              >
-                Aggregation
-              </button>
-              <button
-                className={scaleQuery === 'join' ? 'active' : ''}
-                onClick={() => setScaleQuery('join')}
-              >
-                Complex JOIN
-              </button>
-              <button
-                className={scaleQuery === 'time-series' ? 'active' : ''}
-                onClick={() => setScaleQuery('time-series')}
-              >
-                Time-Series
-              </button>
-              <button
-                className={scaleQuery === 'concurrent' ? 'active' : ''}
-                onClick={() => setScaleQuery('concurrent')}
-              >
-                Concurrent
-              </button>
-              <button
-                className={scaleQuery === 'text' ? 'active' : ''}
-                onClick={() => setScaleQuery('text')}
-              >
-                Text Search
-              </button>
-            </div>
-          </div>
-        </motion.div>
-
-        <motion.div variants={fadeInUp} className="lab-results">
-          <div className="lab-card">
-            <h3>Query Latency (Estimated)</h3>
-            <div className="comparison-bars">
-              <div className="comp-row">
-                <span className="label">ClickHouse</span>
-                <div className="bar-track">
-                  <div
-                    className="bar-fill ch"
-                    style={{ width: `${Math.min(100, (metrics.chTime / Math.max(metrics.chTime, metrics.esTime)) * 100)}%` }}
-                  ></div>
-                </div>
-                <span className="value">{metrics.chTime.toFixed(0)}ms</span>
-              </div>
-              <div className="comp-row">
-                <span className="label">Elasticsearch</span>
-                <div className="bar-track">
-                  <div
-                    className="bar-fill es"
-                    style={{ width: `${Math.min(100, (metrics.esTime / Math.max(metrics.chTime, metrics.esTime)) * 100)}%` }}
-                  ></div>
-                </div>
-                <span className="value">{metrics.esTime > 10000 ? '> 10s' : metrics.esTime.toFixed(0) + 'ms'}</span>
-              </div>
-            </div>
-            <div className="stat-highlight">
-              {metrics.chTime < metrics.esTime ? (
-                <span>ClickHouse is <strong style={{ color: 'var(--ch)' }}>{(metrics.esTime / metrics.chTime).toFixed(1)}x Faster</strong></span>
-              ) : (
-                <span>Elasticsearch is <strong style={{ color: 'var(--es)' }}>{(metrics.chTime / metrics.esTime).toFixed(1)}x Faster</strong></span>
-              )}
-            </div>
-          </div>
-
-          <div className="lab-card">
-            <h3>Storage Footprint</h3>
-            <div className="comparison-bars">
-              <div className="comp-row">
-                <span className="label">ClickHouse</span>
-                <div className="bar-track">
-                  <div
-                    className="bar-fill ch"
-                    style={{ width: `${Math.min(100, (metrics.chStorage / Math.max(metrics.chStorage, metrics.esStorage)) * 100)}%` }}
-                  ></div>
-                </div>
-                <span className="value">{metrics.chStorage.toFixed(1)} GB</span>
-              </div>
-              <div className="comp-row">
-                <span className="label">Elasticsearch</span>
-                <div className="bar-track">
-                  <div
-                    className="bar-fill es"
-                    style={{ width: `${Math.min(100, (metrics.esStorage / Math.max(metrics.chStorage, metrics.esStorage)) * 100)}%` }}
-                  ></div>
-                </div>
-                <span className="value">{metrics.esStorage.toFixed(1)} GB</span>
-              </div>
-            </div>
-            <div className="stat-highlight">
-              <span>ClickHouse saves <strong style={{ color: 'var(--ch)' }}>{(metrics.esStorage - metrics.chStorage).toFixed(1)} GB</strong></span>
-            </div>
-          </div>
-        </motion.div>
-
-        <motion.div variants={fadeInUp} className="lab-insight">
-          {scaleRows > 500000000 && scaleQuery === 'join' ? (
-            <p>🔥 <strong>At this scale:</strong> Elasticsearch fails to execute JOINs efficiently. ClickHouse continues to perform due to MergeJoin algorithm.</p>
-          ) : scaleRows > 500000000 ? (
-            <p>🚀 <strong>At this scale:</strong> ClickHouse's columnar compression saves {(metrics.esStorage - metrics.chStorage).toFixed(0)} GB of storage.</p>
-          ) : scaleQuery === 'text' ? (
-            <p>📝 <strong>Text Search:</strong> Elasticsearch wins here. Its inverted index is optimized for full-text relevance, while ClickHouse scans columns.</p>
-          ) : (
-            <p>ℹ️ <strong>At this scale:</strong> Both systems perform well, but ClickHouse is already cheaper to run.</p>
-          )}
-        </motion.div>
-      </motion.div>
-    );
-  };
-
   const renderMpathicJourney = () => (
     <motion.div className="page mpathic-journey-page" variants={staggerContainer} initial="initial" animate="animate">
       <motion.h2 variants={fadeInUp}>The mpathic Journey</motion.h2>
@@ -801,7 +604,7 @@ function App() {
                     animate={{ width: '7%' }}
                     transition={{ duration: 1, delay: 0.5 }}
                   />
-                  <span className="value">{storageData?.clickhouse.total_mib} MiB</span>
+                  <span className="value">{storageData?.healthcare?.clickhouse?.total_mib} MiB</span>
                 </div>
                 <div className="bar-container">
                   <span className="label">Elasticsearch</span>
@@ -811,7 +614,7 @@ function App() {
                     animate={{ width: '100%' }}
                     transition={{ duration: 1, delay: 0.8 }}
                   />
-                  <span className="value">{storageData?.elasticsearch.total_mb} MB</span>
+                  <span className="value">{storageData?.healthcare?.elasticsearch?.total_mb} MB</span>
                 </div>
               </div>
 
@@ -821,7 +624,7 @@ function App() {
                 animate={{ scale: 1 }}
                 transition={{ type: "spring", delay: 1.2 }}
               >
-                <span className="number">{storageData?.compression_ratio}x</span>
+                <span className="number">{storageData?.healthcare?.compression_ratio}x</span>
                 <span className="text">Better Compression</span>
               </motion.div>
             </motion.div>
@@ -890,6 +693,20 @@ function App() {
                 <div className="ratio">12.1x better</div>
               </motion.div>
             </motion.div>
+          </motion.div>
+        );
+
+      case 'live-storage-demo':
+        return (
+          <motion.div className="page demo-page" variants={staggerContainer} initial="initial" animate="animate">
+            <StorageDemo />
+          </motion.div>
+        );
+
+      case 'live-query-demo':
+        return (
+          <motion.div className="page demo-page" variants={staggerContainer} initial="initial" animate="animate">
+            <LiveQueryDemo />
           </motion.div>
         );
 
@@ -984,9 +801,10 @@ function App() {
             <motion.div variants={fadeInUp} className="scalability-comparison">
               <div className="scale-card ch">
                 <h3>ClickHouse</h3>
-                <div className="scale-stat big">13.1M</div>
+                <div className="scale-stat big">13.07M</div>
                 <div className="scale-label">Rows Loaded</div>
-                <div className="scale-time">in 3 minutes</div>
+                <div className="scale-time">in 184 seconds (3.07 min)</div>
+                <div className="scale-throughput">70,871 rows/sec</div>
                 <div className="scale-status success">✅ Completed</div>
               </div>
 
@@ -994,21 +812,20 @@ function App() {
 
               <div className="scale-card es">
                 <h3>Elasticsearch</h3>
-                <div className="scale-stat big">2.3M</div>
+                <div className="scale-stat big">13.07M</div>
                 <div className="scale-label">Rows Loaded</div>
-                <div className="scale-time">in 10 minutes</div>
-                <div className="scale-status fail">⚠️ Stopped (Too Slow)</div>
+                <div className="scale-time">in 1,636 seconds (27.3 min)</div>
+                <div className="scale-throughput">7,987 rows/sec</div>
+                <div className="scale-status success">✅ Completed</div>
               </div>
             </motion.div>
 
             <motion.div variants={fadeInUp} className="speedup-banner">
-              ClickHouse is <strong>{scalabilityData?.speedup}x Faster</strong> at data ingestion
+              ClickHouse is <strong>8.9x Faster</strong> at data ingestion (ACTUAL measured)
             </motion.div>
           </motion.div>
         );
 
-      case 'nyc-scalelab':
-        return renderScaleLab();
 
       // NYC individual benchmarks
       case 'nyc-simple':
@@ -1103,7 +920,7 @@ function App() {
               animate={{ opacity: 1 }}
               transition={{ delay: 0.8 }}
             >
-              <p>Storage: <strong>13.3x compression</strong> • JOINs: <strong>2.3x faster</strong> • Context matters</p>
+              <p>Storage: <strong>Healthcare 15x, NYC 8.5x compression</strong> • JOINs: <strong>2.3x faster</strong> • Context matters</p>
             </motion.div>
           </motion.div>
         );
@@ -1115,7 +932,7 @@ function App() {
 
             <motion.div variants={fadeInUp} className="summary-stats">
               <div className="stat">
-                <span className="stat-number">13.3x</span>
+                <span className="stat-number">15x / 8.5x</span>
                 <span className="stat-label">Storage Compression</span>
               </div>
               <div className="stat">

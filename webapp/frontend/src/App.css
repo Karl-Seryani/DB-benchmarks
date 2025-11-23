@@ -60,6 +60,20 @@ body {
   overflow-y: auto;
 }
 
+/* Demo pages - full height for embedded components */
+.page.demo-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+}
+
+.page.demo-page > div {
+  width: 100%;
+  max-width: 1400px;
+}
+
 /* Loading state */
 .app.loading {
   display: flex;
@@ -67,6 +81,34 @@ body {
   align-items: center;
   justify-content: center;
   gap: 20px;
+}
+
+/* Dashboard Toggle Button */
+.dashboard-toggle-btn {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  z-index: 100;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  color: var(--text);
+  padding: 12px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dashboard-toggle-btn:hover {
+  background: var(--surface-hover);
+  border-color: var(--accent);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(88, 166, 255, 0.2);
 }
 
 .loader {

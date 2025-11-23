@@ -107,7 +107,7 @@ def check_dataset_sizes():
     # ClickHouse count
     try:
         ch_client = get_clickhouse_client()
-        ch_count = ch_client.execute("SELECT COUNT(*) FROM healthcare_benchmark.nyc_taxi")[0][0]
+        ch_count = ch_client.execute("SELECT COUNT(*) FROM nyc_taxi.trips")[0][0]
         print(f"ClickHouse:    {ch_count:,} rows")
     except Exception as e:
         print(f"ClickHouse:    Error ({e})")
@@ -142,7 +142,7 @@ def benchmark_1_simple_aggregation():
             passenger_count,
             COUNT(*) as trip_count,
             ROUND(AVG(fare_amount), 2) as avg_fare
-        FROM healthcare_benchmark.nyc_taxi
+        FROM nyc_taxi.trips
         GROUP BY passenger_count
         ORDER BY trip_count DESC
     """
@@ -193,7 +193,7 @@ def benchmark_2_multilevel_groupby():
             passenger_count,
             COUNT(*) as count,
             ROUND(AVG(total_amount), 2) as avg_total
-        FROM healthcare_benchmark.nyc_taxi
+        FROM nyc_taxi.trips
         GROUP BY payment_type, passenger_count
         ORDER BY count DESC
         LIMIT 20
@@ -249,7 +249,7 @@ def benchmark_3_timeseries():
             toDate(tpep_pickup_datetime) as date,
             COUNT(*) as trips,
             ROUND(SUM(total_amount), 2) as total_revenue
-        FROM healthcare_benchmark.nyc_taxi
+        FROM nyc_taxi.trips
         GROUP BY date
         ORDER BY date
     """
@@ -303,7 +303,7 @@ def benchmark_4_filter_aggregation():
             COUNT(*) as trip_count,
             ROUND(AVG(fare_amount), 2) as avg_fare,
             ROUND(MAX(fare_amount), 2) as max_fare
-        FROM healthcare_benchmark.nyc_taxi
+        FROM nyc_taxi.trips
         WHERE trip_distance > 10 AND fare_amount > 30
         GROUP BY PULocationID
         ORDER BY trip_count DESC
@@ -366,7 +366,7 @@ def benchmark_5_join_performance():
             COUNT(*) as trip_count,
             ROUND(AVG(trip_distance), 2) as avg_distance,
             ROUND(AVG(fare_amount), 2) as avg_fare
-        FROM healthcare_benchmark.nyc_taxi
+        FROM nyc_taxi.trips
         WHERE trip_distance > 5
         GROUP BY PULocationID, DOLocationID
         ORDER BY trip_count DESC
@@ -450,9 +450,9 @@ def benchmark_6_complex_analytical():
             ROUND(AVG(trip_distance), 2) as avg_distance,
             ROUND(AVG(tip_amount), 2) as avg_tip,
             COUNT(DISTINCT DOLocationID) as unique_destinations
-        FROM healthcare_benchmark.nyc_taxi
+        FROM nyc_taxi.trips
         WHERE fare_amount > (
-            SELECT AVG(fare_amount) FROM healthcare_benchmark.nyc_taxi
+            SELECT AVG(fare_amount) FROM nyc_taxi.trips
         )
         GROUP BY PULocationID, payment_type
         HAVING total_trips > 100
@@ -516,7 +516,7 @@ def benchmark_7_concurrent_load():
             PULocationID,
             COUNT(*) as count,
             AVG(fare_amount) as avg_fare
-        FROM healthcare_benchmark.nyc_taxi
+        FROM nyc_taxi.trips
         GROUP BY PULocationID
     """
 
