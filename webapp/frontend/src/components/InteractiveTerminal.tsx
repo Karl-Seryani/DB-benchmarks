@@ -137,7 +137,7 @@ export const InteractiveTerminal: React.FC = () => {
               className={`dataset-btn ${dataset === 'healthcare_100m' ? 'active' : ''}`}
               onClick={() => setDataset('healthcare_100m')}
             >
-              Healthcare 100M ⏳
+              Healthcare 100M
             </button>
           </div>
         </div>

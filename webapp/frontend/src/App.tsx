@@ -11,8 +11,16 @@ import './App.css';
 const API_URL = 'http://localhost:5002/api';
 
 const COLORS = {
-  clickhouse: '#f97316',
-  elasticsearch: '#14b8a6',
+  clickhouse: '#d9a864',
+  elasticsearch: '#7fb3bf',
+};
+
+const CHART_THEME = {
+  grid: 'rgba(255, 255, 255, 0.06)',
+  axis: 'rgba(255, 255, 255, 0.7)',
+  axisMuted: 'rgba(255, 255, 255, 0.45)',
+  tooltipBg: 'rgba(13, 18, 28, 0.95)',
+  tooltipBorder: 'rgba(255, 255, 255, 0.08)',
 };
 
 interface BenchmarkResult {
@@ -163,7 +171,7 @@ function App() {
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowRight' || e.key === ' ') {
+      if (e.key === 'ArrowRight') {
         e.preventDefault();
         setCurrentPage(p => Math.min(p + 1, pages.length - 1));
       } else if (e.key === 'ArrowLeft') {
@@ -285,6 +293,9 @@ function App() {
     if (!benchmarkData || !info) return null;
 
     const chartData = [benchmarkData];
+    const gradientSuffix = selectedBenchmark.toLowerCase().replace(/[^a-z0-9]/gi, '-');
+    const modalChGradientId = `modal-ch-${gradientSuffix}`;
+    const modalEsGradientId = `modal-es-${gradientSuffix}`;
 
     return (
       <motion.div
@@ -309,22 +320,32 @@ function App() {
             <div className="modal-chart-section">
               <div className="chart-wrapper single-benchmark">
                 <ResponsiveContainer width="100%" height={250}>
-                  <BarChart data={chartData} layout="vertical" margin={{ top: 20, right: 60, left: 20, bottom: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(139, 119, 101, 0.15)" />
-                    <XAxis type="number" stroke="rgba(61, 50, 41, 0.5)" tick={{ fill: 'rgba(201, 209, 217, 0.6)' }} />
+                  <BarChart data={chartData} layout="vertical" margin={{ top: 20, right: 40, left: 10, bottom: 10 }}>
+                    <defs>
+                      <linearGradient id={modalChGradientId} x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0%" stopColor={COLORS.clickhouse} stopOpacity={0.35} />
+                        <stop offset="100%" stopColor={COLORS.clickhouse} stopOpacity={0.9} />
+                      </linearGradient>
+                      <linearGradient id={modalEsGradientId} x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0%" stopColor={COLORS.elasticsearch} stopOpacity={0.35} />
+                        <stop offset="100%" stopColor={COLORS.elasticsearch} stopOpacity={0.9} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.grid} />
+                    <XAxis type="number" stroke={CHART_THEME.axisMuted} tick={{ fill: CHART_THEME.axisMuted }} />
                     <YAxis dataKey="name" type="category" width={100} hide />
                     <Tooltip
                       contentStyle={{
-                        backgroundColor: 'rgba(22, 27, 34, 0.95)',
-                        border: '1px solid rgba(48, 54, 61, 0.8)',
-                        borderRadius: '8px',
-                        color: '#c9d1d9'
+                        backgroundColor: CHART_THEME.tooltipBg,
+                        border: `1px solid ${CHART_THEME.tooltipBorder}`,
+                        borderRadius: 10,
+                        color: CHART_THEME.axis
                       }}
                       formatter={(value: number) => [`${value.toFixed(1)} ms`]}
                     />
-                    <Legend />
-                    <Bar dataKey="ClickHouse" fill={COLORS.clickhouse} radius={[0, 4, 4, 0]} barSize={40} />
-                    <Bar dataKey="Elasticsearch" fill={COLORS.elasticsearch} radius={[0, 4, 4, 0]} barSize={40} />
+                    <Legend wrapperStyle={{ color: CHART_THEME.axisMuted }} />
+                    <Bar dataKey="ClickHouse" fill={`url(#${modalChGradientId})`} radius={[0, 6, 6, 0]} barSize={36} />
+                    <Bar dataKey="Elasticsearch" fill={`url(#${modalEsGradientId})`} radius={[0, 6, 6, 0]} barSize={36} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -488,6 +509,9 @@ function App() {
     }
 
     const chartData = getAllBenchmarkData(data);
+    const gradientSuffix = title.toLowerCase().replace(/[^a-z0-9]/gi, '-');
+    const summaryChGradientId = `summary-ch-${gradientSuffix}`;
+    const summaryEsGradientId = `summary-es-${gradientSuffix}`;
 
     if (chartData.length === 0) {
       return (
@@ -535,43 +559,53 @@ function App() {
               layout="vertical"
               margin={{ top: 20, right: 30, left: 120, bottom: 20 }}
             >
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(48, 54, 61, 0.3)" horizontal={false} />
+              <defs>
+                <linearGradient id={summaryChGradientId} x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stopColor={COLORS.clickhouse} stopOpacity={0.25} />
+                  <stop offset="100%" stopColor={COLORS.clickhouse} stopOpacity={0.9} />
+                </linearGradient>
+                <linearGradient id={summaryEsGradientId} x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stopColor={COLORS.elasticsearch} stopOpacity={0.25} />
+                  <stop offset="100%" stopColor={COLORS.elasticsearch} stopOpacity={0.9} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.grid} horizontal={false} />
               <XAxis
                 type="number"
-                stroke="rgba(139, 148, 158, 0.5)"
-                tick={{ fontSize: 11, fill: 'rgba(201, 209, 217, 0.8)' }}
+                stroke={CHART_THEME.axisMuted}
+                tick={{ fontSize: 11, fill: CHART_THEME.axisMuted }}
                 tickFormatter={(value) => `${value.toFixed(0)}ms`}
               />
               <YAxis
                 dataKey="name"
                 type="category"
-                stroke="rgba(139, 148, 158, 0.5)"
-                tick={{ fontSize: 11, fill: 'rgba(201, 209, 217, 0.8)' }}
+                stroke={CHART_THEME.axisMuted}
+                tick={{ fontSize: 11, fill: CHART_THEME.axis }}
                 width={110}
               />
               <Tooltip
-                cursor={{ fill: 'rgba(249, 115, 22, 0.1)' }}
+                cursor={{ fill: 'rgba(217, 168, 100, 0.08)' }}
                 contentStyle={{
-                  backgroundColor: 'rgba(22, 27, 34, 0.95)',
-                  border: '1px solid rgba(48, 54, 61, 0.8)',
-                  borderRadius: '8px',
-                  color: '#c9d1d9'
+                  backgroundColor: CHART_THEME.tooltipBg,
+                  border: `1px solid ${CHART_THEME.tooltipBorder}`,
+                  borderRadius: 12,
+                  color: CHART_THEME.axis
                 }}
                 formatter={(value: number) => [`${value.toFixed(1)} ms`]}
               />
-              <Legend verticalAlign="top" height={36} />
+              <Legend verticalAlign="top" height={36} wrapperStyle={{ color: CHART_THEME.axisMuted }} />
               <Bar
                 dataKey="ClickHouse"
-                fill={COLORS.clickhouse}
-                radius={[0, 4, 4, 0]}
+                fill={`url(#${summaryChGradientId})`}
+                radius={[0, 6, 6, 0]}
                 onClick={handleBarClick}
                 style={{ cursor: 'pointer' }}
                 barSize={18}
               />
               <Bar
                 dataKey="Elasticsearch"
-                fill={COLORS.elasticsearch}
-                radius={[0, 4, 4, 0]}
+                fill={`url(#${summaryEsGradientId})`}
+                radius={[0, 6, 6, 0]}
                 barSize={18}
                 onClick={handleBarClick}
                 style={{ cursor: 'pointer' }}
@@ -655,7 +689,7 @@ function App() {
               animate={{ opacity: 1 }}
               transition={{ delay: 1.2 }}
             >
-              <kbd>→</kbd> or <kbd>Space</kbd> to continue • <kbd>N</kbd> for speaker notes
+              <kbd>→</kbd> to continue • <kbd>N</kbd> for speaker notes
             </motion.div>
           </motion.div>
         );

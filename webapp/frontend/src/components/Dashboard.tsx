@@ -12,8 +12,16 @@ import './Dashboard.css';
 const API_URL = 'http://localhost:5002/api';
 
 const COLORS = {
-  clickhouse: '#f97316',
-  elasticsearch: '#14b8a6',
+  clickhouse: '#d9a864',
+  elasticsearch: '#7fb3bf',
+};
+
+const CHART_THEME = {
+  grid: 'rgba(255, 255, 255, 0.06)',
+  axis: 'rgba(255, 255, 255, 0.75)',
+  axisMuted: 'rgba(255, 255, 255, 0.5)',
+  tooltipBg: 'rgba(13, 18, 28, 0.95)',
+  tooltipBorder: 'rgba(255, 255, 255, 0.08)'
 };
 
 interface BenchmarkResult {
@@ -37,6 +45,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToPresentation }) => {
   const [loading, setLoading] = useState(true);
   const [selectedDataset, setSelectedDataset] = useState<'healthcare_1m' | 'healthcare_10m' | 'healthcare_100m'>('healthcare_1m');
   const [activeTab, setActiveTab] = useState<'overview' | 'live-query' | 'live-storage'>('overview');
+  const dashboardChGradientId = 'dashboard-ch-gradient';
+  const dashboardEsGradientId = 'dashboard-es-gradient';
 
   useEffect(() => {
     const fetchData = async () => {
@@ -304,33 +314,43 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToPresentation }) => {
                 data={getBenchmarkChartData()}
                 margin={{ top: 20, right: 30, left: 20, bottom: 80 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="#30363d" />
+                <defs>
+                  <linearGradient id={dashboardChGradientId} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={COLORS.clickhouse} stopOpacity={0.35} />
+                    <stop offset="100%" stopColor={COLORS.clickhouse} stopOpacity={0.9} />
+                  </linearGradient>
+                  <linearGradient id={dashboardEsGradientId} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={COLORS.elasticsearch} stopOpacity={0.35} />
+                    <stop offset="100%" stopColor={COLORS.elasticsearch} stopOpacity={0.9} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.grid} />
                 <XAxis
                   dataKey="name"
-                  stroke="#8b949e"
+                  stroke={CHART_THEME.axisMuted}
                   angle={-45}
                   textAnchor="end"
                   height={100}
-                  tick={{ fontSize: 11, fill: '#8b949e' }}
+                  tick={{ fontSize: 11, fill: CHART_THEME.axisMuted }}
                   interval={0}
                 />
                 <YAxis
-                  stroke="#8b949e"
-                  tick={{ fill: '#8b949e' }}
-                  label={{ value: 'Time (ms)', angle: -90, position: 'insideLeft', fill: '#8b949e' }}
+                  stroke={CHART_THEME.axisMuted}
+                  tick={{ fill: CHART_THEME.axisMuted }}
+                  label={{ value: 'Time (ms)', angle: -90, position: 'insideLeft', fill: CHART_THEME.axisMuted }}
                 />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: '#161b22',
-                    border: '1px solid #30363d',
-                    borderRadius: '8px',
-                    color: '#c9d1d9'
+                    backgroundColor: CHART_THEME.tooltipBg,
+                    border: `1px solid ${CHART_THEME.tooltipBorder}`,
+                    borderRadius: '10px',
+                    color: CHART_THEME.axis
                   }}
                   formatter={(value: number) => [`${value.toFixed(1)} ms`]}
                 />
                 <Legend verticalAlign="top" height={36} />
-                <Bar dataKey="ClickHouse" fill={COLORS.clickhouse} radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Elasticsearch" fill={COLORS.elasticsearch} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="ClickHouse" fill={`url(#${dashboardChGradientId})`} radius={[6, 6, 0, 0]} />
+                <Bar dataKey="Elasticsearch" fill={`url(#${dashboardEsGradientId})`} radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

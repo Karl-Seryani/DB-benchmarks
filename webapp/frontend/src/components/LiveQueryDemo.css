@@ -15,7 +15,7 @@
   font-size: 2.5rem;
   font-weight: 700;
   margin-bottom: 12px;
-  background: linear-gradient(135deg, var(--ch), var(--es));
+  background: var(--accent-gradient);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -73,7 +73,7 @@
 }
 
 .dataset-buttons button.active {
-  background: linear-gradient(135deg, var(--ch), var(--es));
+  background: var(--accent-gradient);
   border-color: transparent;
   color: white;
   font-weight: 600;
@@ -107,7 +107,7 @@
 
 .run-button {
   width: 100%;
-  background: linear-gradient(135deg, var(--ch), var(--es));
+  background: var(--accent-gradient);
   border: none;
   color: white;
   padding: 16px 32px;

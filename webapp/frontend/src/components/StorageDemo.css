@@ -25,7 +25,7 @@
   font-size: 2.5rem;
   font-weight: 700;
   margin-bottom: 12px;
-  background: linear-gradient(135deg, var(--ch), var(--es));
+  background: var(--accent-gradient);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -62,7 +62,7 @@
 }
 
 .selector-btn.active {
-  background: linear-gradient(135deg, var(--ch), var(--es));
+  background: var(--accent-gradient);
   border-color: transparent;
   color: white;
   font-weight: 600;
@@ -164,7 +164,7 @@
 }
 
 .ratio-display {
-  background: linear-gradient(135deg, var(--ch), var(--es));
+  background: var(--accent-gradient);
   border-radius: 50%;
   width: 140px;
   height: 140px;

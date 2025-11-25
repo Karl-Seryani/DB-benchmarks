@@ -2,7 +2,7 @@
 
 .dashboard {
   min-height: 100vh;
-  background: var(--bg-gradient);
+  background: transparent;
   color: var(--text);
 }
 
@@ -15,13 +15,14 @@
 }
 
 .dashboard-header {
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  border: 1px solid var(--border);
   padding: 30px 40px;
   position: sticky;
   top: 0;
   z-index: 50;
-  backdrop-filter: blur(10px);
+  border-radius: 26px;
+  box-shadow: var(--shadow-sm);
 }
 
 .header-content {
@@ -90,7 +91,7 @@
 }
 
 .tab-btn.active {
-  background: linear-gradient(135deg, var(--ch), var(--es));
+  background: var(--accent-gradient);
   border-color: transparent;
   color: white;
   font-weight: 600;
@@ -137,7 +138,7 @@
 }
 
 .dataset-buttons button.active {
-  background: linear-gradient(135deg, var(--ch), var(--es));
+  background: var(--accent-gradient);
   border-color: transparent;
   color: white;
   font-weight: 600;
@@ -170,7 +171,7 @@
 }
 
 .presentation-btn {
-  background: linear-gradient(135deg, var(--ch), var(--es));
+  background: var(--accent-gradient);
   border: none;
   color: white;
   padding: 10px 24px;
@@ -394,7 +395,7 @@
 }
 
 .ratio-badge {
-  background: linear-gradient(135deg, var(--ch), var(--es));
+  background: var(--accent-gradient);
   border-radius: 16px;
   padding: 24px 48px;
   text-align: center;
