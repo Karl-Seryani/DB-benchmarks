@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import {
@@ -6,22 +6,8 @@ import {
   ResponsiveContainer
 } from 'recharts';
 import { InteractiveTerminal } from './components/InteractiveTerminal';
+import { API_URL, COLORS, CHART_THEME, BENCHMARK_INFO } from './config/constants';
 import './App.css';
-
-const API_URL = 'http://localhost:5002/api';
-
-const COLORS = {
-  clickhouse: '#d9a864',
-  elasticsearch: '#7fb3bf',
-};
-
-const CHART_THEME = {
-  grid: 'rgba(255, 255, 255, 0.06)',
-  axis: 'rgba(255, 255, 255, 0.7)',
-  axisMuted: 'rgba(255, 255, 255, 0.45)',
-  tooltipBg: 'rgba(13, 18, 28, 0.95)',
-  tooltipBorder: 'rgba(255, 255, 255, 0.08)',
-};
 
 interface BenchmarkResult {
   system: string;
@@ -58,46 +44,6 @@ const slideInLeft = {
 const slideInRight = {
   initial: { opacity: 0, x: 60 },
   animate: { opacity: 1, x: 0, transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] } }
-};
-
-// Benchmark descriptions
-const BENCHMARK_INFO: Record<string, { title: string; description: string; sql: string; tests: string }> = {
-  'Simple Aggregation': {
-    title: 'Simple Aggregation',
-    description: 'Basic aggregations with COUNT, SUM, and AVG across medical events',
-    sql: 'SELECT department, COUNT(*) as events, SUM(cost_usd) as total_cost, AVG(cost_usd) as avg_cost FROM medical_events GROUP BY department',
-    tests: 'Columnar processing excels at multiple aggregations.'
-  },
-  'Multi-Level GROUP BY': {
-    title: 'Multi-Level GROUP BY',
-    description: 'Multi-dimensional grouping by department and severity',
-    sql: 'SELECT department, severity, COUNT(*) as events, AVG(cost_usd) as avg_cost FROM medical_events GROUP BY department, severity',
-    tests: 'Complex multi-level aggregations test.'
-  },
-  'Time-Series Aggregation': {
-    title: 'Time-Series Aggregation',
-    description: 'Daily aggregations across medical events',
-    sql: 'SELECT toDate(timestamp) as date, COUNT(*) as events, SUM(cost_usd) as total_cost FROM medical_events GROUP BY date ORDER BY date DESC',
-    tests: 'Time-series analysis - ClickHouse columnar strength'
-  },
-  'Filter + Aggregation': {
-    title: 'Filter + Aggregation',
-    description: 'Time-filtered queries on recent medical events',
-    sql: "SELECT department, COUNT(*) as events, AVG(cost_usd) as avg_cost FROM medical_events WHERE timestamp >= now() - INTERVAL 7 DAY GROUP BY department",
-    tests: 'Elasticsearch excels at time-filtered queries'
-  },
-  'JOIN Performance': {
-    title: 'JOIN Performance',
-    description: 'JOIN between patients and medical events',
-    sql: 'SELECT p.primary_condition, COUNT(*) as events, AVG(e.cost_usd) as avg_cost FROM patients p JOIN medical_events e ON p.patient_id = e.patient_id WHERE p.age > 50 GROUP BY p.primary_condition',
-    tests: "ClickHouse's native SQL JOINs vs Elasticsearch application-side joins"
-  },
-  'Complex Analytical Query': {
-    title: 'Complex Analytical Query',
-    description: 'Subqueries with aggregations and HAVING clauses',
-    sql: 'SELECT department, COUNT(*) as events, AVG(cost_usd) as avg_cost FROM medical_events WHERE cost_usd > (SELECT AVG(cost_usd) FROM medical_events) GROUP BY department HAVING events > 100',
-    tests: 'Advanced SQL with subqueries - ClickHouse native SQL advantage'
-  }
 };
 
 function App() {
@@ -184,44 +130,49 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [pages.length]);
 
-  const getBenchmarkData = (data: any, benchmarkName: string) => {
-    if (!data?.benchmarks) return null;
+  // Memoized function to extract benchmark data for a specific benchmark
+  const getBenchmarkData = useMemo(() => {
+    return (data: any, benchmarkName: string) => {
+      if (!data?.benchmarks) return null;
 
-    if (Array.isArray(data.benchmarks)) {
-      const ch = data.benchmarks.find((b: BenchmarkResult) => b.system === 'ClickHouse' && b.benchmark === benchmarkName);
-      const es = data.benchmarks.find((b: BenchmarkResult) => b.system === 'Elasticsearch' && b.benchmark === benchmarkName);
-      if (!ch || !es) return null;
-      return {
-        name: benchmarkName.replace(' Aggregation', '').replace(' Performance', '').replace(' Query', ''),
-        ClickHouse: ch.avg_ms,
-        Elasticsearch: es.avg_ms,
-        winner: ch.avg_ms < es.avg_ms ? 'ClickHouse' : 'Elasticsearch',
-        speedup: ch.avg_ms < es.avg_ms ? (es.avg_ms / ch.avg_ms).toFixed(1) : (ch.avg_ms / es.avg_ms).toFixed(1),
-        chQuery: null,
-        esQuery: null
-      };
-    } else {
-      const benchmarkKey = Object.keys(data.benchmarks).find(key => {
-        const bench = data.benchmarks[key];
-        return bench.name === benchmarkName;
-      });
+      if (Array.isArray(data.benchmarks)) {
+        const ch = data.benchmarks.find((b: BenchmarkResult) => b.system === 'ClickHouse' && b.benchmark === benchmarkName);
+        const es = data.benchmarks.find((b: BenchmarkResult) => b.system === 'Elasticsearch' && b.benchmark === benchmarkName);
+        if (!ch || !es) return null;
+        return {
+          name: benchmarkName.replace(' Aggregation', '').replace(' Performance', '').replace(' Query', ''),
+          ClickHouse: ch.avg_ms,
+          Elasticsearch: es.avg_ms,
+          winner: ch.avg_ms < es.avg_ms ? 'ClickHouse' : 'Elasticsearch',
+          speedup: ch.avg_ms < es.avg_ms ? (es.avg_ms / ch.avg_ms).toFixed(1) : (ch.avg_ms / es.avg_ms).toFixed(1),
+          chQuery: null,
+          esQuery: null
+        };
+      } else {
+        const benchmarkKey = Object.keys(data.benchmarks).find(key => {
+          const bench = data.benchmarks[key];
+          return bench.name === benchmarkName;
+        });
 
-      if (!benchmarkKey) return null;
-      const benchmark = data.benchmarks[benchmarkKey];
+        if (!benchmarkKey) return null;
+        const benchmark = data.benchmarks[benchmarkKey];
 
-      return {
-        name: benchmark.name.replace(' Aggregation', '').replace(' Performance', '').replace(' Query', '').replace(' Window', ''),
-        ClickHouse: benchmark.clickhouse.avg_time,
-        Elasticsearch: benchmark.elasticsearch.avg_time,
-        winner: benchmark.winner === 'clickhouse' ? 'ClickHouse' : 'Elasticsearch',
-        speedup: benchmark.speedup.toFixed(1),
-        chQuery: benchmark.clickhouse.query || null,
-        esQuery: benchmark.elasticsearch.query || null
-      };
-    }
-  };
+        return {
+          name: benchmark.name.replace(' Aggregation', '').replace(' Performance', '').replace(' Query', '').replace(' Window', ''),
+          ClickHouse: benchmark.clickhouse.avg_time,
+          Elasticsearch: benchmark.elasticsearch.avg_time,
+          winner: benchmark.winner === 'clickhouse' ? 'ClickHouse' : 'Elasticsearch',
+          speedup: benchmark.speedup.toFixed(1),
+          chQuery: benchmark.clickhouse.query || null,
+          esQuery: benchmark.elasticsearch.query || null
+        };
+      }
+    };
+  }, []);
 
-  const getAllBenchmarkData = (data: any): any[] => {
+  // Memoized function to get all benchmark data for charts
+  const getAllBenchmarkData = useMemo(() => {
+    return (data: any): any[] => {
     if (!data?.benchmarks) return [];
 
     if (Array.isArray(data.benchmarks)) {
@@ -253,7 +204,8 @@ function App() {
       });
       return results;
     }
-  };
+    };
+  }, [getBenchmarkData]);
 
   // Interactive Benchmark State
   const [selectedBenchmark, setSelectedBenchmark] = useState<string | null>(null);

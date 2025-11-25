@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
+import { API_URL } from '../config/constants';
 import './InteractiveTerminal.css';
-
-const API_URL = 'http://localhost:5002/api';
 
 interface QueryResult {
   success: boolean;
