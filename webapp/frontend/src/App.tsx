@@ -5,15 +5,14 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer
 } from 'recharts';
-import LiveQueryDemo from './components/LiveQueryDemo';
-import StorageDemo from './components/StorageDemo';
+import { InteractiveTerminal } from './components/InteractiveTerminal';
 import './App.css';
 
 const API_URL = 'http://localhost:5002/api';
 
 const COLORS = {
-  clickhouse: '#D4763D',
-  elasticsearch: '#2D8B75',
+  clickhouse: '#f97316',
+  elasticsearch: '#14b8a6',
 };
 
 interface BenchmarkResult {
@@ -22,118 +21,136 @@ interface BenchmarkResult {
   avg_ms: number;
 }
 
-// Page transition variants
+// Cinematic page transitions
 const pageVariants = {
-  initial: { opacity: 0, y: 20 },
-  animate: { opacity: 1, y: 0 },
-  exit: { opacity: 0, y: -20 }
+  initial: { opacity: 0, scale: 0.95 },
+  animate: { opacity: 1, scale: 1 },
+  exit: { opacity: 0, scale: 1.05 }
 };
 
 const staggerContainer = {
-  animate: { transition: { staggerChildren: 0.15, delayChildren: 0.1 } }
+  animate: { transition: { staggerChildren: 0.1, delayChildren: 0.2 } }
 };
 
 const fadeInUp = {
-  initial: { opacity: 0, y: 30 },
-  animate: { opacity: 1, y: 0 }
+  initial: { opacity: 0, y: 40 },
+  animate: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] } }
+};
+
+const scaleIn = {
+  initial: { opacity: 0, scale: 0.8 },
+  animate: { opacity: 1, scale: 1, transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] } }
+};
+
+const slideInLeft = {
+  initial: { opacity: 0, x: -60 },
+  animate: { opacity: 1, x: 0, transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] } }
+};
+
+const slideInRight = {
+  initial: { opacity: 0, x: 60 },
+  animate: { opacity: 1, x: 0, transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] } }
 };
 
 // Benchmark descriptions
 const BENCHMARK_INFO: Record<string, { title: string; description: string; sql: string; tests: string }> = {
   'Simple Aggregation': {
     title: 'Simple Aggregation',
-    description: 'Basic COUNT and AVG operations grouped by a single field',
-    sql: 'SELECT department, COUNT(*), AVG(cost) FROM events GROUP BY department',
-    tests: 'Fundamental OLAP capability and basic aggregation performance'
+    description: 'Basic aggregations with COUNT, SUM, and AVG across medical events',
+    sql: 'SELECT department, COUNT(*) as events, SUM(cost_usd) as total_cost, AVG(cost_usd) as avg_cost FROM medical_events GROUP BY department',
+    tests: 'Columnar processing excels at multiple aggregations.'
   },
   'Multi-Level GROUP BY': {
     title: 'Multi-Level GROUP BY',
-    description: 'Grouping data by multiple dimensions simultaneously',
-    sql: 'SELECT dept, severity, COUNT(*) FROM events GROUP BY dept, severity',
-    tests: 'Multi-dimensional analysis and cardinality handling'
+    description: 'Multi-dimensional grouping by department and severity',
+    sql: 'SELECT department, severity, COUNT(*) as events, AVG(cost_usd) as avg_cost FROM medical_events GROUP BY department, severity',
+    tests: 'Complex multi-level aggregations test.'
   },
   'Time-Series Aggregation': {
     title: 'Time-Series Aggregation',
-    description: 'Daily aggregations over time-stamped data',
-    sql: 'SELECT DATE(timestamp), COUNT(*), SUM(amount) GROUP BY DATE(timestamp)',
-    tests: 'Date-partitioned queries - a ClickHouse strength'
+    description: 'Daily aggregations across medical events',
+    sql: 'SELECT toDate(timestamp) as date, COUNT(*) as events, SUM(cost_usd) as total_cost FROM medical_events GROUP BY date ORDER BY date DESC',
+    tests: 'Time-series analysis - ClickHouse columnar strength'
   },
   'Filter + Aggregation': {
     title: 'Filter + Aggregation',
-    description: 'WHERE clause filtering combined with aggregations',
-    sql: "SELECT ... WHERE severity='Critical' AND cost > 3000 GROUP BY ...",
-    tests: 'Selective filtering before aggregation'
+    description: 'Time-filtered queries on recent medical events',
+    sql: "SELECT department, COUNT(*) as events, AVG(cost_usd) as avg_cost FROM medical_events WHERE timestamp >= now() - INTERVAL 7 DAY GROUP BY department",
+    tests: 'Elasticsearch excels at time-filtered queries'
   },
   'JOIN Performance': {
     title: 'JOIN Performance',
-    description: 'Joining multiple tables (SQL vs application-side)',
-    sql: 'SELECT ... FROM patients JOIN events ON patient_id',
-    tests: "ClickHouse's native SQL JOIN vs Elasticsearch workaround"
+    description: 'JOIN between patients and medical events',
+    sql: 'SELECT p.primary_condition, COUNT(*) as events, AVG(e.cost_usd) as avg_cost FROM patients p JOIN medical_events e ON p.patient_id = e.patient_id WHERE p.age > 50 GROUP BY p.primary_condition',
+    tests: "ClickHouse's native SQL JOINs vs Elasticsearch application-side joins"
   },
   'Complex Analytical Query': {
-    title: 'Complex Analytical',
-    description: 'Subqueries, HAVING clauses, and multiple aggregations',
-    sql: 'SELECT ... WHERE cost > (SELECT AVG(cost)...) HAVING count > 10',
-    tests: 'Advanced SQL capabilities and query optimization'
-  },
-  'Concurrent Load': {
-    title: 'Concurrent Load',
-    description: '5 simultaneous queries executing in parallel',
-    sql: '5x parallel: SELECT ... GROUP BY ...',
-    tests: 'Scalability and resource management under load'
+    title: 'Complex Analytical Query',
+    description: 'Subqueries with aggregations and HAVING clauses',
+    sql: 'SELECT department, COUNT(*) as events, AVG(cost_usd) as avg_cost FROM medical_events WHERE cost_usd > (SELECT AVG(cost_usd) FROM medical_events) GROUP BY department HAVING events > 100',
+    tests: 'Advanced SQL with subqueries - ClickHouse native SQL advantage'
   }
 };
 
 function App() {
   const [currentPage, setCurrentPage] = useState(0);
-  const [syntheticData, setSyntheticData] = useState<any>(null);
-  const [nycData, setNycData] = useState<any>(null);
+  const [healthcare1mData, setHealthcare1mData] = useState<any>(null);
+  const [healthcare10mData, setHealthcare10mData] = useState<any>(null);
+  const [healthcare100mData, setHealthcare100mData] = useState<any>(null);
   const [storageData, setStorageData] = useState<any>(null);
-  const [mpathicData, setMpathicData] = useState<any>(null);
   const [scalabilityData, setScalabilityData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-
-
-
+  const [showSpeakerNotes, setShowSpeakerNotes] = useState(false);
 
   const pages = [
     'intro',
-    'mpathic',
-    'architecture',
-    'storage',
-    'live-storage-demo',
-    'healthcare-intro',
-    'healthcare-summary',
-    'live-query-demo',
-    'nyc-intro',
-    'nyc-scalability',
-    'nyc-summary',
-    'comparison',
+    'problem-statement',
+    'datasets-overview',
+    'ingestion-performance',
+    'storage-healthcare-1m',
+    'storage-healthcare-10m',
+    'storage-healthcare-100m',
+    'performance-healthcare-1m',
+    'performance-healthcare-10m',
+    'performance-healthcare-100m',
+    'interactive-terminal',
     'takeaways',
-    'questions'
+    'conclusions'
   ];
+
+  // Speaker notes for each slide
+  const speakerNotes: Record<string, string> = {
+    'intro': 'Introduce yourself. "Today I\'ll be presenting my comparative analysis of ClickHouse versus Elasticsearch..."',
+    'problem-statement': 'Explain the motivation. Both are popular for analytics but built on fundamentally different architectures.',
+    'datasets-overview': 'Describe the three healthcare datasets: 1M, 10M, and 100M rows.',
+    'ingestion-performance': 'Critical metric: ClickHouse loads data 20-23x faster. This matters for real-time pipelines.',
+    'storage-healthcare-1m': 'Highlight compression advantage. Storage costs money in cloud environments.',
+    'storage-healthcare-10m': 'As data scales, ClickHouse advantage becomes more pronounced.',
+    'storage-healthcare-100m': 'At 100M scale, compression and ingestion speed differences are massive.',
+    'performance-healthcare-1m': 'Performance patterns at 1M scale.',
+    'performance-healthcare-10m': 'At 10M scale, patterns shift with more data.',
+    'performance-healthcare-100m': 'At 100M scale, architectural differences dominate.',
+    'interactive-terminal': 'Demo time! Try queries on different datasets.',
+    'takeaways': 'Query pattern matters. Choose based on your workload.',
+    'conclusions': 'No universal winner. ClickHouse for analytics, Elasticsearch for hybrid search-analytics.'
+  };
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [synthetic, nyc, storage, mpathic, scalability] = await Promise.all([
-          axios.get(`${API_URL}/results/synthetic`).catch(() => ({ data: null })),
-          axios.get(`${API_URL}/results/nyc`).catch(() => ({ data: null })),
-          axios.get(`${API_URL}/storage`),
-          axios.get(`${API_URL}/mpathic`),
-          axios.get(`${API_URL}/scalability`)
+        const [hc1m, hc10m, hc100m, storage, scalability] = await Promise.all([
+          axios.get(`${API_URL}/results/healthcare_1m`).catch(() => ({ data: null })),
+          axios.get(`${API_URL}/results/healthcare_10m`).catch(() => ({ data: null })),
+          axios.get(`${API_URL}/results/healthcare_100m`).catch(() => ({ data: null })),
+          axios.get(`${API_URL}/storage`).catch(() => ({ data: {} })),
+          axios.get(`${API_URL}/scalability`).catch(() => ({ data: {} }))
         ]);
 
-        if (synthetic.data && !synthetic.data.error) {
-          setSyntheticData(synthetic.data);
-        }
-        if (nyc.data && !nyc.data.error) {
-          setNycData(nyc.data);
-        }
-
-        setStorageData(storage.data);
-        setMpathicData(mpathic.data);
-        setScalabilityData(scalability.data);
+        if (hc1m.data && !hc1m.data.error) setHealthcare1mData(hc1m.data);
+        if (hc10m.data && !hc10m.data.error) setHealthcare10mData(hc10m.data);
+        if (hc100m.data && !hc100m.data.error) setHealthcare100mData(hc100m.data);
+        setStorageData(storage.data || {});
+        setScalabilityData(scalability.data || {});
         setLoading(false);
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -147,9 +164,12 @@ function App() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'ArrowRight' || e.key === ' ') {
+        e.preventDefault();
         setCurrentPage(p => Math.min(p + 1, pages.length - 1));
       } else if (e.key === 'ArrowLeft') {
         setCurrentPage(p => Math.max(p - 1, 0));
+      } else if (e.key === 'n' || e.key === 'N') {
+        setShowSpeakerNotes(s => !s);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -158,117 +178,85 @@ function App() {
 
   const getBenchmarkData = (data: any, benchmarkName: string) => {
     if (!data?.benchmarks) return null;
-    const ch = data.benchmarks.find((b: BenchmarkResult) => b.system === 'ClickHouse' && b.benchmark === benchmarkName);
-    const es = data.benchmarks.find((b: BenchmarkResult) => b.system === 'Elasticsearch' && b.benchmark === benchmarkName);
-    if (!ch || !es) return null;
-    return {
-      name: benchmarkName.replace(' Aggregation', '').replace(' Performance', '').replace(' Query', ''),
-      ClickHouse: ch.avg_ms,
-      Elasticsearch: es.avg_ms,
-      winner: ch.avg_ms < es.avg_ms ? 'ClickHouse' : 'Elasticsearch',
-      speedup: ch.avg_ms < es.avg_ms ? (es.avg_ms / ch.avg_ms).toFixed(1) : (ch.avg_ms / es.avg_ms).toFixed(1)
-    };
-  };
 
-  const getAllBenchmarkData = (data: any) => {
-    if (!data?.benchmarks) return [];
-    const names = [
-      'Simple Aggregation', 'Multi-Level GROUP BY', 'Time-Series Aggregation',
-      'Filter + Aggregation', 'JOIN Performance', 'Complex Analytical Query', 'Concurrent Load'
-    ];
-    return names.map(name => {
-      const result = getBenchmarkData(data, name);
+    if (Array.isArray(data.benchmarks)) {
+      const ch = data.benchmarks.find((b: BenchmarkResult) => b.system === 'ClickHouse' && b.benchmark === benchmarkName);
+      const es = data.benchmarks.find((b: BenchmarkResult) => b.system === 'Elasticsearch' && b.benchmark === benchmarkName);
+      if (!ch || !es) return null;
       return {
-        ...(result || { name: name.replace(' Aggregation', '').replace(' Performance', '').replace(' Query', ''), ClickHouse: 0, Elasticsearch: 0 }),
-        fullName: name // Add full name for reliable lookup
+        name: benchmarkName.replace(' Aggregation', '').replace(' Performance', '').replace(' Query', ''),
+        ClickHouse: ch.avg_ms,
+        Elasticsearch: es.avg_ms,
+        winner: ch.avg_ms < es.avg_ms ? 'ClickHouse' : 'Elasticsearch',
+        speedup: ch.avg_ms < es.avg_ms ? (es.avg_ms / ch.avg_ms).toFixed(1) : (ch.avg_ms / es.avg_ms).toFixed(1),
+        chQuery: null,
+        esQuery: null
       };
-    });
+    } else {
+      const benchmarkKey = Object.keys(data.benchmarks).find(key => {
+        const bench = data.benchmarks[key];
+        return bench.name === benchmarkName;
+      });
+
+      if (!benchmarkKey) return null;
+      const benchmark = data.benchmarks[benchmarkKey];
+
+      return {
+        name: benchmark.name.replace(' Aggregation', '').replace(' Performance', '').replace(' Query', '').replace(' Window', ''),
+        ClickHouse: benchmark.clickhouse.avg_time,
+        Elasticsearch: benchmark.elasticsearch.avg_time,
+        winner: benchmark.winner === 'clickhouse' ? 'ClickHouse' : 'Elasticsearch',
+        speedup: benchmark.speedup.toFixed(1),
+        chQuery: benchmark.clickhouse.query || null,
+        esQuery: benchmark.elasticsearch.query || null
+      };
+    }
   };
 
-  const renderBenchmarkSlide = (benchmarkName: string, data: any, datasetLabel: string) => {
-    const benchmarkData = getBenchmarkData(data, benchmarkName);
-    const info = BENCHMARK_INFO[benchmarkName];
+  const getAllBenchmarkData = (data: any): any[] => {
+    if (!data?.benchmarks) return [];
 
-    if (!benchmarkData || !info) {
-      return (
-        <motion.div className="page" variants={staggerContainer} initial="initial" animate="animate">
-          <motion.h2 variants={fadeInUp}>Loading...</motion.h2>
-        </motion.div>
-      );
+    if (Array.isArray(data.benchmarks)) {
+      const names = [
+        'Simple Aggregation', 'Multi-Level GROUP BY', 'Time-Series Aggregation',
+        'Filter + Aggregation', 'JOIN Performance', 'Complex Analytical Query'
+      ];
+      return names.map(name => {
+        const result = getBenchmarkData(data, name);
+        return {
+          ...(result || { name: name.replace(' Aggregation', '').replace(' Performance', '').replace(' Query', ''), ClickHouse: 0, Elasticsearch: 0, winner: '', speedup: '1.0' }),
+          fullName: name
+        };
+      });
+    } else {
+      const results: any[] = [];
+      Object.keys(data.benchmarks).forEach(key => {
+        const benchmark = data.benchmarks[key];
+        if (benchmark?.clickhouse && benchmark?.elasticsearch) {
+          results.push({
+            name: benchmark.name.replace(' Aggregation', '').replace(' Performance', '').replace(' Query', '').replace(' Analysis', '').replace(' Window', ''),
+            fullName: benchmark.name,
+            ClickHouse: benchmark.clickhouse.avg_time,
+            Elasticsearch: benchmark.elasticsearch.avg_time,
+            winner: benchmark.winner === 'clickhouse' ? 'ClickHouse' : 'Elasticsearch',
+            speedup: benchmark.speedup ? benchmark.speedup.toFixed(1) : '1.0'
+          });
+        }
+      });
+      return results;
     }
-
-    const chartData = [benchmarkData];
-
-    return (
-      <motion.div className="page benchmark-page" variants={staggerContainer} initial="initial" animate="animate">
-        <motion.h2 variants={fadeInUp}>{info.title}</motion.h2>
-        <motion.p variants={fadeInUp} className="page-subtitle">{datasetLabel}</motion.p>
-
-        <motion.div variants={fadeInUp} className="benchmark-info">
-          <p className="benchmark-desc">{info.description}</p>
-          <code className="benchmark-sql">{info.sql}</code>
-          <p className="benchmark-tests"><strong>Tests:</strong> {info.tests}</p>
-        </motion.div>
-
-        <motion.div variants={fadeInUp} className="chart-wrapper single-benchmark">
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={chartData} layout="vertical" margin={{ top: 20, right: 80, left: 20, bottom: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(139, 119, 101, 0.15)" />
-              <XAxis type="number" stroke="rgba(61, 50, 41, 0.5)" tick={{ fill: 'rgba(61, 50, 41, 0.6)' }} />
-              <YAxis dataKey="name" type="category" width={100} stroke="rgba(61, 50, 41, 0.5)" tick={{ fill: 'rgba(61, 50, 41, 0.6)' }} />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                  border: '1px solid rgba(139, 119, 101, 0.2)',
-                  borderRadius: '8px',
-                  color: '#3D3229'
-                }}
-                formatter={(value: number) => [`${value.toFixed(1)} ms`]}
-              />
-              <Legend />
-              <Bar dataKey="ClickHouse" fill={COLORS.clickhouse} radius={[0, 4, 4, 0]} />
-              <Bar dataKey="Elasticsearch" fill={COLORS.elasticsearch} radius={[0, 4, 4, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </motion.div>
-
-        <motion.div variants={fadeInUp} className="benchmark-result">
-          <div className={`winner-badge ${benchmarkData.winner === 'Elasticsearch' ? 'es-winner' : ''}`}>
-            <div className="winner-label">WINNER</div>
-            <div className="winner-name">{benchmarkData.winner}</div>
-            <div className="winner-speedup">{benchmarkData.speedup}x faster</div>
-          </div>
-          <div className="times">
-            <div className="time ch">
-              <div className="label">ClickHouse</div>
-              <div className="value">{benchmarkData.ClickHouse.toFixed(1)}ms</div>
-            </div>
-            <div className="vs-text">vs</div>
-            <div className="time es">
-              <div className="label">Elasticsearch</div>
-              <div className="value">{benchmarkData.Elasticsearch.toFixed(1)}ms</div>
-            </div>
-          </div>
-        </motion.div>
-      </motion.div>
-    );
   };
 
   // Interactive Benchmark State
   const [selectedBenchmark, setSelectedBenchmark] = useState<string | null>(null);
 
   const handleBarClick = (data: any) => {
-    // If clicked on a Bar, data is the payload directly
-    if (data && data.fullName) {
+    if (data?.fullName) {
       setSelectedBenchmark(data.fullName);
       return;
     }
-    // If clicked on the Chart background (sometimes passed differently), check activePayload
-    if (data && data.activePayload && data.activePayload.length > 0) {
-      const payload = data.activePayload[0].payload;
-      if (payload && payload.fullName) {
-        setSelectedBenchmark(payload.fullName);
-      }
+    if (data?.activePayload?.[0]?.payload?.fullName) {
+      setSelectedBenchmark(data.activePayload[0].payload.fullName);
     }
   };
 
@@ -276,14 +264,21 @@ function App() {
     if (!selectedBenchmark) return null;
 
     const info = BENCHMARK_INFO[selectedBenchmark];
-    // Determine which dataset to use based on the current page or just default to NYC for the modal since it's the "main" one?
-    // Actually, the summary slide is specific to a dataset (Healthcare or NYC).
-    // We need to know which dataset we are currently viewing.
-    // We can infer it from the currentPage or pass it into the modal state.
-    // For simplicity, let's assume NYC if we are on NYC summary, Healthcare if Healthcare summary.
-    const isNyc = pages[currentPage].includes('nyc');
-    const data = isNyc ? nycData : syntheticData;
-    const datasetLabel = isNyc ? 'NYC Taxi Dataset (13M rows)' : 'Healthcare Dataset (160K rows)';
+    const currentPageName = pages[currentPage];
+    const is100m = currentPageName.includes('100m');
+    const is10m = currentPageName.includes('10m') && !is100m;
+
+    let data, datasetLabel;
+    if (is100m) {
+      data = healthcare100mData;
+      datasetLabel = 'Healthcare Dataset (100M rows)';
+    } else if (is10m) {
+      data = healthcare10mData;
+      datasetLabel = 'Healthcare Dataset (10M rows)';
+    } else {
+      data = healthcare1mData;
+      datasetLabel = 'Healthcare Dataset (1M rows)';
+    }
 
     const benchmarkData = getBenchmarkData(data, selectedBenchmark);
 
@@ -307,7 +302,6 @@ function App() {
           onClick={(e) => e.stopPropagation()}
         >
           <button className="close-modal-btn" onClick={() => setSelectedBenchmark(null)}>×</button>
-
           <h2>{info.title}</h2>
           <p className="modal-subtitle">{datasetLabel}</p>
 
@@ -317,15 +311,14 @@ function App() {
                 <ResponsiveContainer width="100%" height={250}>
                   <BarChart data={chartData} layout="vertical" margin={{ top: 20, right: 60, left: 20, bottom: 20 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(139, 119, 101, 0.15)" />
-                    <XAxis type="number" stroke="rgba(61, 50, 41, 0.5)" tick={{ fill: 'rgba(61, 50, 41, 0.6)' }} />
+                    <XAxis type="number" stroke="rgba(61, 50, 41, 0.5)" tick={{ fill: 'rgba(201, 209, 217, 0.6)' }} />
                     <YAxis dataKey="name" type="category" width={100} hide />
                     <Tooltip
-                      cursor={{ fill: 'rgba(0,0,0,0.05)' }}
                       contentStyle={{
-                        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                        border: '1px solid rgba(139, 119, 101, 0.2)',
+                        backgroundColor: 'rgba(22, 27, 34, 0.95)',
+                        border: '1px solid rgba(48, 54, 61, 0.8)',
                         borderRadius: '8px',
-                        color: '#3D3229'
+                        color: '#c9d1d9'
                       }}
                       formatter={(value: number) => [`${value.toFixed(1)} ms`]}
                     />
@@ -350,10 +343,29 @@ function App() {
                 <h4>Description</h4>
                 <p>{info.description}</p>
               </div>
-              <div className="info-block">
-                <h4>SQL Query</h4>
-                <code className="benchmark-sql">{info.sql}</code>
-              </div>
+
+              {benchmarkData.chQuery ? (
+                <>
+                  <div className="info-block">
+                    <h4>ClickHouse Query</h4>
+                    <code className="benchmark-sql copyable">{benchmarkData.chQuery}</code>
+                  </div>
+                  <div className="info-block">
+                    <h4>Elasticsearch Query</h4>
+                    <code className="benchmark-sql copyable es-query">{
+                      typeof benchmarkData.esQuery === 'object'
+                        ? JSON.stringify(benchmarkData.esQuery, null, 2)
+                        : benchmarkData.esQuery
+                    }</code>
+                  </div>
+                </>
+              ) : (
+                <div className="info-block">
+                  <h4>SQL Query</h4>
+                  <code className="benchmark-sql">{info.sql}</code>
+                </div>
+              )}
+
               <div className="info-block">
                 <h4>What we tested</h4>
                 <p>{info.tests}</p>
@@ -365,43 +377,185 @@ function App() {
     );
   };
 
-  const renderSummarySlide = (data: any, title: string, subtitle: string) => {
-    const chartData = getAllBenchmarkData(data);
+  // Enhanced Storage Slide with Visual Impact
+  const renderStorageSlide = (datasetKey: string, title: string, subtitle: string, rowCount: string) => {
+    if (!storageData || !storageData[datasetKey]) {
+      return (
+        <motion.div className="page storage-page" variants={staggerContainer} initial="initial" animate="animate">
+          <motion.h2 variants={fadeInUp}>{title}</motion.h2>
+          <motion.p variants={fadeInUp} className="page-subtitle">{subtitle}</motion.p>
+          <motion.div variants={fadeInUp} className="loading-placeholder">
+            <div className="pulse-circle"></div>
+            <p>{datasetKey === 'healthcare_100m' ? 'Coming Soon - Data Loading in Progress...' : 'Loading storage data...'}</p>
+          </motion.div>
+        </motion.div>
+      );
+    }
+
+    const storage = storageData[datasetKey];
+    const chTotal = storage.clickhouse_mb / 1024;
+    const esTotal = storage.elasticsearch_mb / 1024;
+    const compressionRatio = storage.compression_ratio;
 
     return (
-      <motion.div className="page summary-page" variants={staggerContainer} initial="initial" animate="animate">
-        <motion.h2 variants={fadeInUp}>{title}</motion.h2>
-        <motion.p variants={fadeInUp} className="page-subtitle">{subtitle}</motion.p>
+      <motion.div className="page storage-page-new" variants={staggerContainer} initial="initial" animate="animate">
+        <motion.div className="slide-header" variants={fadeInUp}>
+          <span className="slide-number">{currentPage + 1}</span>
+          <h2>{title}</h2>
+          <p className="page-subtitle">{subtitle} • {rowCount}</p>
+        </motion.div>
+
+        <div className="storage-content-grid">
+          <motion.div className="storage-visual-section" variants={slideInLeft}>
+            <div className="storage-bars-visual">
+              <div className="bar-item">
+                <div className="bar-label">
+                  <span className="db-name ch">ClickHouse</span>
+                  <span className="bar-value">{chTotal < 1 ? `${(chTotal * 1024).toFixed(1)} MB` : `${chTotal.toFixed(2)} GB`}</span>
+                </div>
+                <div className="bar-track">
+                  <motion.div
+                    className="bar-fill ch"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${(chTotal / esTotal) * 100}%` }}
+                    transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1], delay: 0.3 }}
+                  />
+                </div>
+              </div>
+              <div className="bar-item">
+                <div className="bar-label">
+                  <span className="db-name es">Elasticsearch</span>
+                  <span className="bar-value">{esTotal < 1 ? `${(esTotal * 1024).toFixed(1)} MB` : `${esTotal.toFixed(2)} GB`}</span>
+                </div>
+                <div className="bar-track">
+                  <motion.div
+                    className="bar-fill es"
+                    initial={{ width: 0 }}
+                    animate={{ width: '100%' }}
+                    transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1], delay: 0.5 }}
+                  />
+                </div>
+              </div>
+            </div>
+          </motion.div>
+
+          <motion.div className="compression-highlight" variants={scaleIn}>
+            <div className="compression-circle">
+              <motion.span
+                className="compression-number"
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ duration: 0.6, delay: 0.8, type: "spring", stiffness: 200 }}
+              >
+                {compressionRatio}x
+              </motion.span>
+              <span className="compression-label">Better Compression</span>
+            </div>
+            <p className="compression-winner">ClickHouse Advantage</p>
+          </motion.div>
+        </div>
+
+        <motion.div className="slide-insight" variants={fadeInUp}>
+          {datasetKey === 'healthcare_1m' && (
+            <p><strong>{compressionRatio}x compression</strong> means significant cloud storage cost savings</p>
+          )}
+          {datasetKey === 'healthcare_10m' && (
+            <p>Compression advantage <strong>increases with scale</strong> - columnar storage shines</p>
+          )}
+          {datasetKey === 'healthcare_100m' && (
+            <p><strong>At enterprise scale:</strong> Compression differences translate to massive cost savings</p>
+          )}
+        </motion.div>
+      </motion.div>
+    );
+  };
+
+  // Enhanced Summary Slide
+  const renderSummarySlide = (data: any, title: string, subtitle: string) => {
+    if (!data) {
+      return (
+        <motion.div className="page summary-page" variants={staggerContainer} initial="initial" animate="animate">
+          <motion.div className="slide-header" variants={fadeInUp}>
+            <span className="slide-number">{currentPage + 1}</span>
+            <h2>{title}</h2>
+            <p className="page-subtitle">{subtitle}</p>
+          </motion.div>
+          <motion.div variants={fadeInUp} className="loading-placeholder">
+            <p>{title.includes('100M') ? 'Coming Soon - Data Loading in Progress...' : 'Run benchmarks to see results'}</p>
+          </motion.div>
+        </motion.div>
+      );
+    }
+
+    const chartData = getAllBenchmarkData(data);
+
+    if (chartData.length === 0) {
+      return (
+        <motion.div className="page summary-page" variants={staggerContainer} initial="initial" animate="animate">
+          <motion.div className="slide-header" variants={fadeInUp}>
+            <span className="slide-number">{currentPage + 1}</span>
+            <h2>{title}</h2>
+            <p className="page-subtitle">{subtitle}</p>
+          </motion.div>
+          <motion.div variants={fadeInUp} className="loading-placeholder">
+            <p>No benchmark data available</p>
+          </motion.div>
+        </motion.div>
+      );
+    }
+
+    // Calculate winners
+    const chWins = chartData.filter((d: any) => d?.winner === 'ClickHouse').length;
+    const esWins = chartData.filter((d: any) => d?.winner === 'Elasticsearch').length;
+
+    return (
+      <motion.div className="page summary-page-new" variants={staggerContainer} initial="initial" animate="animate">
+        <motion.div className="slide-header" variants={fadeInUp}>
+          <span className="slide-number">{currentPage + 1}</span>
+          <h2>{title}</h2>
+          <p className="page-subtitle">{subtitle}</p>
+        </motion.div>
+
+        <motion.div className="winner-summary" variants={fadeInUp}>
+          <div className="winner-pill ch">
+            <span className="winner-count">{chWins}</span>
+            <span className="winner-label">ClickHouse Wins</span>
+          </div>
+          <div className="winner-pill es">
+            <span className="winner-count">{esWins}</span>
+            <span className="winner-label">Elasticsearch Wins</span>
+          </div>
+        </motion.div>
 
         <motion.div variants={fadeInUp} className="chart-wrapper interactive-chart">
-          <div className="interaction-hint">👆 Click any bar for details</div>
-          <ResponsiveContainer width="100%" height={400}>
+          <div className="interaction-hint">Click any bar for details</div>
+          <ResponsiveContainer width="100%" height={450}>
             <BarChart
               data={chartData}
-              margin={{ top: 20, right: 30, left: 20, bottom: 100 }}
+              layout="vertical"
+              margin={{ top: 20, right: 30, left: 120, bottom: 20 }}
             >
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(139, 119, 101, 0.15)" />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(48, 54, 61, 0.3)" horizontal={false} />
               <XAxis
-                dataKey="name"
-                stroke="rgba(61, 50, 41, 0.5)"
-                angle={-45}
-                textAnchor="end"
-                height={100}
-                tick={{ fontSize: 11, fill: 'rgba(61, 50, 41, 0.6)' }}
-                interval={0}
+                type="number"
+                stroke="rgba(139, 148, 158, 0.5)"
+                tick={{ fontSize: 11, fill: 'rgba(201, 209, 217, 0.8)' }}
+                tickFormatter={(value) => `${value.toFixed(0)}ms`}
               />
               <YAxis
-                stroke="rgba(61, 50, 41, 0.5)"
-                tick={{ fill: 'rgba(61, 50, 41, 0.6)' }}
-                label={{ value: 'Time (ms)', angle: -90, position: 'insideLeft', fill: 'rgba(61, 50, 41, 0.6)' }}
+                dataKey="name"
+                type="category"
+                stroke="rgba(139, 148, 158, 0.5)"
+                tick={{ fontSize: 11, fill: 'rgba(201, 209, 217, 0.8)' }}
+                width={110}
               />
               <Tooltip
                 cursor={{ fill: 'rgba(249, 115, 22, 0.1)' }}
                 contentStyle={{
-                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                  border: '1px solid rgba(139, 119, 101, 0.2)',
+                  backgroundColor: 'rgba(22, 27, 34, 0.95)',
+                  border: '1px solid rgba(48, 54, 61, 0.8)',
                   borderRadius: '8px',
-                  color: '#3D3229'
+                  color: '#c9d1d9'
                 }}
                 formatter={(value: number) => [`${value.toFixed(1)} ms`]}
               />
@@ -409,14 +563,16 @@ function App() {
               <Bar
                 dataKey="ClickHouse"
                 fill={COLORS.clickhouse}
-                radius={[4, 4, 0, 0]}
+                radius={[0, 4, 4, 0]}
                 onClick={handleBarClick}
                 style={{ cursor: 'pointer' }}
+                barSize={18}
               />
               <Bar
                 dataKey="Elasticsearch"
                 fill={COLORS.elasticsearch}
-                radius={[4, 4, 0, 0]}
+                radius={[0, 4, 4, 0]}
+                barSize={18}
                 onClick={handleBarClick}
                 style={{ cursor: 'pointer' }}
               />
@@ -424,8 +580,8 @@ function App() {
           </ResponsiveContainer>
         </motion.div>
 
-        <motion.div variants={fadeInUp} className="summary-insight">
-          <p>Lower bars = faster performance. Compare execution times across all 7 benchmarks.</p>
+        <motion.div variants={fadeInUp} className="slide-insight">
+          <p>Lower bars = faster performance</p>
         </motion.div>
       </motion.div>
     );
@@ -450,534 +606,440 @@ function App() {
     );
   }
 
-
-
-  const renderMpathicJourney = () => (
-    <motion.div className="page mpathic-journey-page" variants={staggerContainer} initial="initial" animate="animate">
-      <motion.h2 variants={fadeInUp}>The mpathic Journey</motion.h2>
-
-      <div className="journey-track">
-        <motion.div className="journey-step" initial={{ opacity: 0, x: -50 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}>
-          <div className="step-icon fail">🐌</div>
-          <h3>The Bottleneck</h3>
-          <p>Elasticsearch clusters crashing under billions of genomic rows. Queries taking 15+ minutes.</p>
-        </motion.div>
-
-        <motion.div className="arrow" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }}>→</motion.div>
-
-        <motion.div className="journey-step" initial={{ opacity: 0, x: -50 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.6 }}>
-          <div className="step-icon action">⚡</div>
-          <h3>The Migration</h3>
-          <p>Moved to ClickHouse Cloud. Data compressed by 13x. No more EC2 management.</p>
-        </motion.div>
-
-        <motion.div className="arrow" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8 }}>→</motion.div>
-
-        <motion.div className="journey-step" initial={{ opacity: 0, x: -50 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 1.0 }}>
-          <div className="step-icon success">🚀</div>
-          <h3>The Result</h3>
-          <p>Queries in &lt; 4 minutes. Native SQL JOINs enabled new ML pipelines. Massive cost savings.</p>
-        </motion.div>
-      </div>
-
-      <motion.div className="quote-box" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.2 }}>
-        "We moved from managing infrastructure to innovating on our ML models."
-      </motion.div>
-    </motion.div>
-  );
-
   const renderPage = () => {
     switch (pages[currentPage]) {
       case 'intro':
         return (
-          <motion.div className="page intro-page" variants={staggerContainer} initial="initial" animate="animate">
-            <motion.h1 variants={fadeInUp} className="main-title">
-              <span className="ch">ClickHouse</span>
-              <span className="vs">vs</span>
-              <span className="es">Elasticsearch</span>
-            </motion.h1>
-            <motion.p variants={fadeInUp} className="subtitle">
-              Performance Benchmark Analysis
-            </motion.p>
-            <motion.div variants={fadeInUp} className="team-card">
-              <p>Karl Seryani • Arik Dhaliwal • Raghav Gulati</p>
-              <span>Database Systems • Fall 2025</span>
-            </motion.div>
-            <motion.div variants={fadeInUp} className="hint">
-              Press <kbd>→</kbd> or <kbd>Space</kbd> to continue
-            </motion.div>
-          </motion.div>
-        );
-
-
-      case 'mpathic':
-        return renderMpathicJourney();
-
-      case 'mpathic-benefits':
-        return (
-          <motion.div className="page mpathic-benefits-page" variants={staggerContainer} initial="initial" animate="animate">
-            <motion.h2 variants={fadeInUp}>Why mpathic Switched</motion.h2>
-            <motion.p variants={fadeInUp} className="page-subtitle">Pain points with Elasticsearch</motion.p>
-
-            <motion.div variants={fadeInUp} className="pain-points-grid">
-              <motion.div className="pain-point" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-                <div className="pain-icon">🐌</div>
-                <h4>Performance</h4>
-                <p>Slow analytical queries on billions of genomic rows</p>
-              </motion.div>
-              <motion.div className="pain-point" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-                <div className="pain-icon">⚙️</div>
-                <h4>Operational Overhead</h4>
-                <p>Self-managed EC2 clusters required constant maintenance</p>
-              </motion.div>
-              <motion.div className="pain-point" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
-                <div className="pain-icon">💰</div>
-                <h4>Storage Costs</h4>
-                <p>Document storage inflated storage requirements</p>
-              </motion.div>
-              <motion.div className="pain-point" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
-                <div className="pain-icon">🔗</div>
-                <h4>Limited SQL</h4>
-                <p>No native JOINs for complex ML pipeline queries</p>
-              </motion.div>
+          <motion.div className="page intro-page-new" variants={staggerContainer} initial="initial" animate="animate">
+            <motion.div className="intro-content" variants={fadeInUp}>
+              <motion.h1
+                className="main-title-new"
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <span className="title-db ch">ClickHouse</span>
+                <motion.span
+                  className="title-vs"
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ delay: 0.3, type: "spring", stiffness: 300 }}
+                >
+                  vs
+                </motion.span>
+                <span className="title-db es">Elasticsearch</span>
+              </motion.h1>
+              <motion.p
+                className="subtitle-new"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.5 }}
+              >
+                Performance Benchmark Analysis
+              </motion.p>
             </motion.div>
 
-            <motion.div variants={fadeInUp} className="solution-box">
-              <strong>Solution:</strong> Migrate to ClickHouse Cloud for managed OLAP with full SQL support
+            <motion.div
+              className="team-card-new"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.7 }}
+            >
+              <div className="team-names">Karl Seryani • Arik Dhaliwal • Raghav Gulati</div>
+              <div className="team-course">Database Systems • Fall 2025</div>
+            </motion.div>
+
+            <motion.div
+              className="nav-hint"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 1.2 }}
+            >
+              <kbd>→</kbd> or <kbd>Space</kbd> to continue • <kbd>N</kbd> for speaker notes
             </motion.div>
           </motion.div>
         );
 
-      case 'architecture':
+      case 'problem-statement':
         return (
-          <motion.div className="page architecture-page" variants={staggerContainer} initial="initial" animate="animate">
-            <motion.h2 variants={fadeInUp}>Architecture Comparison</motion.h2>
-            <motion.p variants={fadeInUp} className="page-subtitle">Fundamentally different storage engines</motion.p>
+          <motion.div className="page problem-page" variants={staggerContainer} initial="initial" animate="animate">
+            <motion.div className="slide-header" variants={fadeInUp}>
+              <span className="slide-number">{currentPage + 1}</span>
+              <h2>The Question</h2>
+              <p className="page-subtitle">When should you use ClickHouse vs Elasticsearch?</p>
+            </motion.div>
 
-            <motion.div variants={fadeInUp} className="arch-comparison">
-              <motion.div className="arch-card ch" initial={{ x: -50, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.3 }}>
+            <div className="arch-comparison-new">
+              <motion.div className="arch-card-new ch" variants={slideInLeft}>
+                <div className="arch-icon">⚡</div>
                 <h3>ClickHouse</h3>
-                <div className="arch-type">Columnar OLAP</div>
-                <ul className="arch-features">
-                  <li>Stores data by columns</li>
-                  <li>Excellent compression (LZ4, ZSTD)</li>
-                  <li>Native SQL with JOINs</li>
-                  <li>Optimized for aggregations</li>
-                  <li>MergeTree engine</li>
+                <div className="arch-type-badge">Columnar OLAP</div>
+                <ul className="arch-features-new">
+                  <li>Optimized for analytics</li>
+                  <li>Aggressive compression</li>
+                  <li>Native SQL support</li>
+                  <li>Fast full-table scans</li>
                 </ul>
               </motion.div>
 
-              <motion.div className="vs-divider" initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.5 }}>
+              <motion.div
+                className="vs-circle"
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: 0.4, type: "spring" }}
+              >
                 VS
               </motion.div>
 
-              <motion.div className="arch-card es" initial={{ x: 50, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.3 }}>
+              <motion.div className="arch-card-new es" variants={slideInRight}>
+                <div className="arch-icon">🔍</div>
                 <h3>Elasticsearch</h3>
-                <div className="arch-type">Document Store</div>
-                <ul className="arch-features">
-                  <li>Stores JSON documents</li>
-                  <li>Inverted index for search</li>
-                  <li>DSL query language</li>
-                  <li>Optimized for full-text search</li>
-                  <li>Lucene-based engine</li>
+                <div className="arch-type-badge">Document Search</div>
+                <ul className="arch-features-new">
+                  <li>Built on Lucene</li>
+                  <li>Inverted indexes</li>
+                  <li>Fast filtered queries</li>
+                  <li>Full-text search</li>
                 </ul>
               </motion.div>
+            </div>
+
+            <motion.div className="slide-insight" variants={fadeInUp}>
+              <p>Both popular for analytics, but <strong>fundamentally different architectures</strong></p>
             </motion.div>
           </motion.div>
         );
 
-      case 'storage':
+      case 'datasets-overview':
         return (
-          <motion.div className="page storage-page" variants={staggerContainer} initial="initial" animate="animate">
-            <motion.h2 variants={fadeInUp}>Storage Efficiency</motion.h2>
-            <motion.p variants={fadeInUp} className="page-subtitle">
-              The most significant finding of our study
-            </motion.p>
+          <motion.div className="page datasets-page" variants={staggerContainer} initial="initial" animate="animate">
+            <motion.div className="slide-header" variants={fadeInUp}>
+              <span className="slide-number">{currentPage + 1}</span>
+              <h2>Test Datasets</h2>
+              <p className="page-subtitle">Three scales of healthcare data to test different workload patterns</p>
+            </motion.div>
 
-            <motion.div variants={fadeInUp} className="storage-visual">
-              <div className="storage-bars">
-                <div className="bar-container">
-                  <span className="label">ClickHouse</span>
-                  <motion.div
-                    className="bar ch"
-                    initial={{ width: 0 }}
-                    animate={{ width: '7%' }}
-                    transition={{ duration: 1, delay: 0.5 }}
-                  />
-                  <span className="value">{storageData?.healthcare?.clickhouse?.total_mib} MiB</span>
+            <div className="datasets-showcase">
+              <motion.div
+                className="dataset-card-new"
+                variants={fadeInUp}
+                whileHover={{ scale: 1.02, y: -5 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div className="dataset-size">1M</div>
+                <h3>Healthcare (Small)</h3>
+                <p>200K patients, 500K events, 300K prescriptions</p>
+                <div className="dataset-meta">
+                  <span>3 tables</span>
+                  <span>•</span>
+                  <span>Small enterprise</span>
                 </div>
-                <div className="bar-container">
-                  <span className="label">Elasticsearch</span>
-                  <motion.div
-                    className="bar es"
-                    initial={{ width: 0 }}
-                    animate={{ width: '100%' }}
-                    transition={{ duration: 1, delay: 0.8 }}
-                  />
-                  <span className="value">{storageData?.healthcare?.elasticsearch?.total_mb} MB</span>
-                </div>
-              </div>
+              </motion.div>
 
               <motion.div
-                className="ratio-badge"
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: "spring", delay: 1.2 }}
+                className="dataset-card-new featured"
+                variants={fadeInUp}
+                whileHover={{ scale: 1.02, y: -5 }}
+                transition={{ duration: 0.2 }}
               >
-                <span className="number">{storageData?.healthcare?.compression_ratio}x</span>
-                <span className="text">Better Compression</span>
-              </motion.div>
-            </motion.div>
-
-            <motion.div variants={fadeInUp} className="callout">
-              <strong>mpathic Impact:</strong> At scale, this compression translates to massive storage cost savings
-            </motion.div>
-          </motion.div>
-        );
-
-      case 'storage-breakdown':
-        return (
-          <motion.div className="page storage-breakdown-page" variants={staggerContainer} initial="initial" animate="animate">
-            <motion.h2 variants={fadeInUp}>Storage Breakdown by Table</motion.h2>
-            <motion.p variants={fadeInUp} className="page-subtitle">Per-table compression analysis</motion.p>
-
-            <motion.div variants={fadeInUp} className="breakdown-grid">
-              <motion.div className="breakdown-card" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-                <h4>Patients (10K rows)</h4>
-                <div className="breakdown-bars">
-                  <div className="breakdown-item">
-                    <span className="label">ClickHouse</span>
-                    <div className="mini-bar ch" style={{ width: '7%' }}></div>
-                    <span className="val">96 KiB</span>
-                  </div>
-                  <div className="breakdown-item">
-                    <span className="label">Elasticsearch</span>
-                    <div className="mini-bar es" style={{ width: '100%' }}></div>
-                    <span className="val">1.37 MB</span>
-                  </div>
+                <div className="dataset-size">10M</div>
+                <h3>Healthcare (Medium)</h3>
+                <p>2M patients, 5M events, 3M prescriptions</p>
+                <div className="dataset-meta">
+                  <span>3 tables</span>
+                  <span>•</span>
+                  <span>Medium enterprise</span>
                 </div>
-                <div className="ratio">14.3x better</div>
               </motion.div>
 
-              <motion.div className="breakdown-card" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-                <h4>Medical Events (100K rows)</h4>
-                <div className="breakdown-bars">
-                  <div className="breakdown-item">
-                    <span className="label">ClickHouse</span>
-                    <div className="mini-bar ch" style={{ width: '7%' }}></div>
-                    <span className="val">1.51 MiB</span>
-                  </div>
-                  <div className="breakdown-item">
-                    <span className="label">Elasticsearch</span>
-                    <div className="mini-bar es" style={{ width: '100%' }}></div>
-                    <span className="val">20.31 MB</span>
-                  </div>
+              <motion.div
+                className="dataset-card-new"
+                variants={fadeInUp}
+                whileHover={{ scale: 1.02, y: -5 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div className="dataset-size">100M</div>
+                <h3>Healthcare (Large)</h3>
+                <p>10M patients, 60M events, 30M prescriptions</p>
+                <div className="dataset-meta">
+                  <span>3 tables</span>
+                  <span>•</span>
+                  <span>Enterprise scale</span>
                 </div>
-                <div className="ratio">13.5x better</div>
               </motion.div>
+            </div>
 
-              <motion.div className="breakdown-card" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
-                <h4>IoT Telemetry (50K rows)</h4>
-                <div className="breakdown-bars">
-                  <div className="breakdown-item">
-                    <span className="label">ClickHouse</span>
-                    <div className="mini-bar ch" style={{ width: '8%' }}></div>
-                    <span className="val">521 KiB</span>
-                  </div>
-                  <div className="breakdown-item">
-                    <span className="label">Elasticsearch</span>
-                    <div className="mini-bar es" style={{ width: '100%' }}></div>
-                    <span className="val">6.29 MB</span>
-                  </div>
-                </div>
-                <div className="ratio">12.1x better</div>
+            <motion.div className="slide-insight" variants={fadeInUp}>
+              <p>Each dataset tests <strong>different query patterns</strong> and scale characteristics</p>
+            </motion.div>
+          </motion.div>
+        );
+
+      case 'ingestion-performance':
+        return (
+          <motion.div className="page ingestion-page" variants={staggerContainer} initial="initial" animate="animate">
+            <motion.div className="slide-header" variants={fadeInUp}>
+              <span className="slide-number">{currentPage + 1}</span>
+              <h2>Data Ingestion Performance</h2>
+              <p className="page-subtitle">How long does it take to load data at each scale?</p>
+            </motion.div>
+
+            {!scalabilityData || (!scalabilityData.healthcare_1m && !scalabilityData.healthcare_10m) ? (
+              <motion.div variants={fadeInUp} className="loading-placeholder">
+                <div className="pulse-circle"></div>
+                <p>Loading ingestion data...</p>
               </motion.div>
-            </motion.div>
-          </motion.div>
-        );
+            ) : (
+              <>
+                <motion.div className="ingestion-comparison-grid" variants={fadeInUp}>
+                  {/* 1M Dataset */}
+                  {scalabilityData.healthcare_1m && (
+                    <motion.div className="ingestion-dataset-card" variants={slideInLeft}>
+                      <h3>1M Rows</h3>
+                      <div className="ingestion-stats-row">
+                        <div className="ingestion-stat ch">
+                          <div className="stat-icon">⚡</div>
+                          <div className="stat-label">ClickHouse</div>
+                          <div className="stat-time">{scalabilityData.healthcare_1m.clickhouse.load_time_seconds.toFixed(1)}s</div>
+                          <div className="stat-throughput">{(scalabilityData.healthcare_1m.clickhouse.throughput_rows_sec / 1000).toFixed(0)}K rows/sec</div>
+                        </div>
+                        <div className="ingestion-vs-badge">
+                          <span className="speedup-value">{scalabilityData.healthcare_1m.speedup}x</span>
+                          <span className="speedup-label">faster</span>
+                        </div>
+                        <div className="ingestion-stat es">
+                          <div className="stat-icon">🐌</div>
+                          <div className="stat-label">Elasticsearch</div>
+                          <div className="stat-time">{scalabilityData.healthcare_1m.elasticsearch.load_time_seconds.toFixed(1)}s</div>
+                          <div className="stat-throughput">{(scalabilityData.healthcare_1m.elasticsearch.throughput_rows_sec / 1000).toFixed(0)}K rows/sec</div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
 
-      case 'live-storage-demo':
-        return (
-          <motion.div className="page demo-page" variants={staggerContainer} initial="initial" animate="animate">
-            <StorageDemo />
-          </motion.div>
-        );
+                  {/* 10M Dataset */}
+                  {scalabilityData.healthcare_10m && (
+                    <motion.div className="ingestion-dataset-card" variants={fadeInUp}>
+                      <h3>10M Rows</h3>
+                      <div className="ingestion-stats-row">
+                        <div className="ingestion-stat ch">
+                          <div className="stat-icon">⚡</div>
+                          <div className="stat-label">ClickHouse</div>
+                          <div className="stat-time">{scalabilityData.healthcare_10m.clickhouse.load_time_seconds.toFixed(1)}s</div>
+                          <div className="stat-throughput">{(scalabilityData.healthcare_10m.clickhouse.throughput_rows_sec / 1000).toFixed(0)}K rows/sec</div>
+                        </div>
+                        <div className="ingestion-vs-badge">
+                          <span className="speedup-value">{scalabilityData.healthcare_10m.speedup}x</span>
+                          <span className="speedup-label">faster</span>
+                        </div>
+                        <div className="ingestion-stat es">
+                          <div className="stat-icon">🐌</div>
+                          <div className="stat-label">Elasticsearch</div>
+                          <div className="stat-time">{(scalabilityData.healthcare_10m.elasticsearch.load_time_seconds / 60).toFixed(1)} min</div>
+                          <div className="stat-throughput">{(scalabilityData.healthcare_10m.elasticsearch.throughput_rows_sec / 1000).toFixed(0)}K rows/sec</div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
 
-      case 'live-query-demo':
-        return (
-          <motion.div className="page demo-page" variants={staggerContainer} initial="initial" animate="animate">
-            <LiveQueryDemo />
-          </motion.div>
-        );
-
-      // Healthcare dataset intro
-      case 'healthcare-intro':
-        return (
-          <motion.div className="page dataset-intro-page" variants={staggerContainer} initial="initial" animate="animate">
-            <motion.h2 variants={fadeInUp}>Healthcare Dataset Benchmarks</motion.h2>
-            <motion.p variants={fadeInUp} className="page-subtitle">Synthetic medical records • 160,000 rows</motion.p>
-
-            <motion.div variants={fadeInUp} className="dataset-details">
-              <div className="detail-card">
-                <h4>Tables</h4>
-                <ul>
-                  <li>Patients (10K rows)</li>
-                  <li>Medical Events (100K rows)</li>
-                  <li>IoT Telemetry (50K rows)</li>
-                </ul>
-              </div>
-              <div className="detail-card">
-                <h4>7 Benchmarks</h4>
-                <ul>
-                  <li>Simple to Complex Aggregations</li>
-                  <li>JOIN Performance</li>
-                  <li>Concurrent Load Testing</li>
-                </ul>
-              </div>
-            </motion.div>
-
-            <motion.div variants={fadeInUp} className="insight-box">
-              Each benchmark runs 5 times, results show average execution time
-            </motion.div>
-          </motion.div>
-        );
-
-      // Healthcare individual benchmarks
-      case 'healthcare-simple':
-        return renderBenchmarkSlide('Simple Aggregation', syntheticData, 'Healthcare Dataset (160K rows)');
-      case 'healthcare-multilevel':
-        return renderBenchmarkSlide('Multi-Level GROUP BY', syntheticData, 'Healthcare Dataset (160K rows)');
-      case 'healthcare-timeseries':
-        return renderBenchmarkSlide('Time-Series Aggregation', syntheticData, 'Healthcare Dataset (160K rows)');
-      case 'healthcare-filter':
-        return renderBenchmarkSlide('Filter + Aggregation', syntheticData, 'Healthcare Dataset (160K rows)');
-      case 'healthcare-join':
-        return renderBenchmarkSlide('JOIN Performance', syntheticData, 'Healthcare Dataset (160K rows)');
-      case 'healthcare-complex':
-        return renderBenchmarkSlide('Complex Analytical Query', syntheticData, 'Healthcare Dataset (160K rows)');
-      case 'healthcare-concurrent':
-        return renderBenchmarkSlide('Concurrent Load', syntheticData, 'Healthcare Dataset (160K rows)');
-      case 'healthcare-summary':
-        return renderSummarySlide(syntheticData, 'Healthcare Results Summary', 'All 7 benchmarks on 160K rows');
-
-      // NYC Taxi dataset intro
-      case 'nyc-intro':
-        return (
-          <motion.div className="page dataset-intro-page" variants={staggerContainer} initial="initial" animate="animate">
-            <motion.h2 variants={fadeInUp}>NYC Taxi Dataset Benchmarks</motion.h2>
-            <motion.p variants={fadeInUp} className="page-subtitle">Real-world trip data • 13 Million rows</motion.p>
-
-            <motion.div variants={fadeInUp} className="dataset-details">
-              <div className="detail-card">
-                <h4>Data Source</h4>
-                <ul>
-                  <li>NYC TLC Trip Records</li>
-                  <li>Pickup/dropoff times</li>
-                  <li>Fare amounts, distances</li>
-                </ul>
-              </div>
-              <div className="detail-card">
-                <h4>Scale Comparison</h4>
-                <ul>
-                  <li>19x larger than healthcare</li>
-                  <li>Tests at-scale performance</li>
-                  <li>Same 7 benchmark suite</li>
-                </ul>
-              </div>
-            </motion.div>
-
-            <motion.div variants={fadeInUp} className="insight-box">
-              Larger datasets reveal true performance characteristics
-            </motion.div>
-          </motion.div>
-        );
-
-      case 'nyc-scalability':
-        return (
-          <motion.div className="page scalability-page" variants={staggerContainer} initial="initial" animate="animate">
-            <motion.h2 variants={fadeInUp}>Scalability Test: Ingestion Speed</motion.h2>
-            <motion.p variants={fadeInUp} className="page-subtitle">Attempting to load 13 Million Rows</motion.p>
-
-            <motion.div variants={fadeInUp} className="scalability-comparison">
-              <div className="scale-card ch">
-                <h3>ClickHouse</h3>
-                <div className="scale-stat big">13.07M</div>
-                <div className="scale-label">Rows Loaded</div>
-                <div className="scale-time">in 184 seconds (3.07 min)</div>
-                <div className="scale-throughput">70,871 rows/sec</div>
-                <div className="scale-status success">✅ Completed</div>
-              </div>
-
-              <div className="vs-badge">VS</div>
-
-              <div className="scale-card es">
-                <h3>Elasticsearch</h3>
-                <div className="scale-stat big">13.07M</div>
-                <div className="scale-label">Rows Loaded</div>
-                <div className="scale-time">in 1,636 seconds (27.3 min)</div>
-                <div className="scale-throughput">7,987 rows/sec</div>
-                <div className="scale-status success">✅ Completed</div>
-              </div>
-            </motion.div>
-
-            <motion.div variants={fadeInUp} className="speedup-banner">
-              ClickHouse is <strong>8.9x Faster</strong> at data ingestion (ACTUAL measured)
-            </motion.div>
-          </motion.div>
-        );
-
-
-      // NYC individual benchmarks
-      case 'nyc-simple':
-        return renderBenchmarkSlide('Simple Aggregation', nycData, 'NYC Taxi Dataset (13M rows)');
-      case 'nyc-multilevel':
-        return renderBenchmarkSlide('Multi-Level GROUP BY', nycData, 'NYC Taxi Dataset (13M rows)');
-      case 'nyc-timeseries':
-        return renderBenchmarkSlide('Time-Series Aggregation', nycData, 'NYC Taxi Dataset (13M rows)');
-      case 'nyc-filter':
-        return renderBenchmarkSlide('Filter + Aggregation', nycData, 'NYC Taxi Dataset (13M rows)');
-      case 'nyc-join':
-        return renderBenchmarkSlide('JOIN Performance', nycData, 'NYC Taxi Dataset (13M rows)');
-      case 'nyc-complex':
-        return renderBenchmarkSlide('Complex Analytical Query', nycData, 'NYC Taxi Dataset (13M rows)');
-      case 'nyc-concurrent':
-        return renderBenchmarkSlide('Concurrent Load', nycData, 'NYC Taxi Dataset (13M rows)');
-      case 'nyc-summary':
-        return renderSummarySlide(nycData, 'NYC Taxi Results Summary', 'All 7 benchmarks on 13M rows');
-
-      case 'comparison':
-        return (
-          <motion.div className="page comparison-page" variants={staggerContainer} initial="initial" animate="animate">
-            <motion.h2 variants={fadeInUp}>mpathic vs Our Results</motion.h2>
-
-            <motion.div variants={fadeInUp} className="comparison-grid">
-              {mpathicData?.comparison_panels.map((panel: any, i: number) => (
-                <motion.div
-                  key={i}
-                  className="comparison-card"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 + i * 0.1 }}
-                >
-                  <h4>{panel.metric}</h4>
-                  <div className="values">
-                    <div className="mpathic-val">
-                      <span className="label">mpathic</span>
-                      <span className="val">{panel.mpathic}</span>
-                    </div>
-                    <div className="our-val">
-                      <span className="label">Our Test</span>
-                      <span className="val">{panel.our_test}</span>
-                    </div>
-                  </div>
-                  <p className="insight">{panel.insight}</p>
+                  {/* 100M Dataset - Coming Soon or Actual */}
+                  <motion.div className="ingestion-dataset-card" variants={slideInRight}>
+                    <h3>100M Rows</h3>
+                    {scalabilityData.healthcare_100m ? (
+                      <div className="ingestion-stats-row">
+                        <div className="ingestion-stat ch">
+                          <div className="stat-icon">⚡</div>
+                          <div className="stat-label">ClickHouse</div>
+                          <div className="stat-time">{(scalabilityData.healthcare_100m.clickhouse.load_time_seconds / 60).toFixed(1)} min</div>
+                          <div className="stat-throughput">{(scalabilityData.healthcare_100m.clickhouse.throughput_rows_sec / 1000).toFixed(0)}K rows/sec</div>
+                        </div>
+                        <div className="ingestion-vs-badge">
+                          <span className="speedup-value">{scalabilityData.healthcare_100m.speedup}x</span>
+                          <span className="speedup-label">faster</span>
+                        </div>
+                        <div className="ingestion-stat es">
+                          <div className="stat-icon">🐌</div>
+                          <div className="stat-label">Elasticsearch</div>
+                          <div className="stat-time">{(scalabilityData.healthcare_100m.elasticsearch.load_time_seconds / 3600).toFixed(1)} hrs</div>
+                          <div className="stat-throughput">{(scalabilityData.healthcare_100m.elasticsearch.throughput_rows_sec / 1000).toFixed(0)}K rows/sec</div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="coming-soon-badge">
+                        <div className="loading-spinner">⏳</div>
+                        <div>Loading in Progress...</div>
+                        <div className="coming-soon-note">Check back soon for 100M results</div>
+                      </div>
+                    )}
+                  </motion.div>
                 </motion.div>
-              ))}
-            </motion.div>
+
+                <motion.div className="slide-insight" variants={fadeInUp}>
+                  <p><strong>Key Insight:</strong> ClickHouse maintains 20-23x faster ingestion across all scales. This is critical for real-time data pipelines.</p>
+                </motion.div>
+              </>
+            )}
+          </motion.div>
+        );
+
+      case 'storage-healthcare-1m':
+        return renderStorageSlide('healthcare_1m', 'Storage: Healthcare 1M', 'Synthetic medical records', '1M rows');
+
+      case 'storage-healthcare-10m':
+        return renderStorageSlide('healthcare_10m', 'Storage: Healthcare 10M', 'Medium enterprise scale', '10M rows');
+
+      case 'storage-healthcare-100m':
+        return renderStorageSlide('healthcare_100m', 'Storage: Healthcare 100M', 'Large enterprise scale', '100M rows');
+
+      case 'performance-healthcare-1m':
+        return renderSummarySlide(healthcare1mData, 'Performance: Healthcare 1M', '1M rows across 3 tables');
+
+      case 'performance-healthcare-10m':
+        return renderSummarySlide(healthcare10mData, 'Performance: Healthcare 10M', '10M rows across 3 tables');
+
+      case 'performance-healthcare-100m':
+        return renderSummarySlide(healthcare100mData, 'Performance: Healthcare 100M', '100M rows across 3 tables');
+
+      case 'interactive-terminal':
+        return (
+          <motion.div className="page demo-page" variants={staggerContainer} initial="initial" animate="animate">
+            <InteractiveTerminal />
           </motion.div>
         );
 
       case 'takeaways':
         return (
-          <motion.div className="page takeaways-page" variants={staggerContainer} initial="initial" animate="animate">
-            <motion.h2 variants={fadeInUp}>Key Takeaways</motion.h2>
-
-            <motion.div variants={fadeInUp} className="takeaway-grid">
-              <motion.div
-                className="takeaway-card ch"
-                initial={{ x: -50, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                transition={{ delay: 0.3 }}
-              >
-                <h3>Choose ClickHouse</h3>
-                <ul>
-                  <li>Large datasets (100M+ rows)</li>
-                  <li>Complex SQL (JOINs, subqueries)</li>
-                  <li>Storage costs matter</li>
-                  <li>Time-series analytics</li>
-                </ul>
-              </motion.div>
-
-              <motion.div
-                className="takeaway-card es"
-                initial={{ x: 50, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                transition={{ delay: 0.3 }}
-              >
-                <h3>Choose Elasticsearch</h3>
-                <ul>
-                  <li>Full-text search</li>
-                  <li>Small-medium datasets</li>
-                  <li>Simple aggregations</li>
-                  <li>Real-time indexing</li>
-                </ul>
-              </motion.div>
+          <motion.div className="page takeaways-page-new" variants={staggerContainer} initial="initial" animate="animate">
+            <motion.div className="slide-header" variants={fadeInUp}>
+              <span className="slide-number">{currentPage + 1}</span>
+              <h2>Key Takeaways</h2>
             </motion.div>
 
-            <motion.div
-              className="final-message"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.8 }}
-            >
-              <p>Storage: <strong>Healthcare 15x, NYC 8.5x compression</strong> • JOINs: <strong>2.3x faster</strong> • Context matters</p>
+            <div className="takeaways-grid">
+              <motion.div className="takeaway-card-new ch" variants={slideInLeft}>
+                <div className="takeaway-header">
+                  <span className="takeaway-icon">⚡</span>
+                  <h3>Choose ClickHouse</h3>
+                </div>
+                <ul>
+                  <li>Full historical analytics (billions of rows)</li>
+                  <li>Complex SQL with JOINs & subqueries</li>
+                  <li>6-9x storage compression</li>
+                  <li>20x faster bulk ingestion</li>
+                  <li>Time-series on complete datasets</li>
+                </ul>
+              </motion.div>
+
+              <motion.div className="takeaway-card-new es" variants={slideInRight}>
+                <div className="takeaway-header">
+                  <span className="takeaway-icon">🔍</span>
+                  <h3>Choose Elasticsearch</h3>
+                </div>
+                <ul>
+                  <li>Recent data analysis (7/30/90 days)</li>
+                  <li>Full-text search + analytics</li>
+                  <li>High-cardinality filtered aggregations</li>
+                  <li>Document-oriented data</li>
+                  <li>Geospatial queries</li>
+                </ul>
+              </motion.div>
+            </div>
+
+            <motion.div className="key-insight-box" variants={scaleIn}>
+              <div className="insight-icon">💡</div>
+              <div className="insight-content">
+                <h4>Critical Insight</h4>
+                <p><strong>Query pattern matters more than data size</strong></p>
+                <p className="insight-detail">Scale from 1M to 100M shows consistent architectural advantages</p>
+              </div>
             </motion.div>
           </motion.div>
         );
 
-      case 'questions':
+      case 'conclusions':
         return (
-          <motion.div className="page questions-page" variants={staggerContainer} initial="initial" animate="animate">
-            <motion.h2 variants={fadeInUp} className="questions-title">Questions?</motion.h2>
+          <motion.div className="page conclusions-page" variants={staggerContainer} initial="initial" animate="animate">
+            <motion.div className="slide-header" variants={fadeInUp}>
+              <span className="slide-number">{currentPage + 1}</span>
+              <h2>Conclusions</h2>
+            </motion.div>
 
-            <motion.div variants={fadeInUp} className="summary-stats">
-              <div className="stat">
-                <span className="stat-number">15x / 8.5x</span>
-                <span className="stat-label">Storage Compression</span>
+            <motion.div className="final-stats" variants={fadeInUp}>
+              <div className="final-stat">
+                <span className="final-stat-value">6-9x</span>
+                <span className="final-stat-label">Storage Compression</span>
               </div>
-              <div className="stat">
-                <span className="stat-number">2.3x</span>
-                <span className="stat-label">JOIN Performance</span>
+              <div className="final-stat">
+                <span className="final-stat-value">20x</span>
+                <span className="final-stat-label">Ingestion Speed</span>
               </div>
-              <div className="stat">
-                <span className="stat-number">7</span>
-                <span className="stat-label">Benchmarks Run</span>
+              <div className="final-stat">
+                <span className="final-stat-value">3</span>
+                <span className="final-stat-label">Dataset Scales</span>
               </div>
             </motion.div>
 
-            <motion.div variants={fadeInUp} className="team-credit">
-              <p>Karl Seryani • Arik Dhaliwal • Raghav Gulati</p>
-              <p className="course">Database Systems • Fall 2025</p>
+            <motion.div className="final-message-new" variants={fadeInUp}>
+              <p className="main-conclusion">There's no universal winner</p>
+              <p className="sub-conclusion">The right choice depends entirely on your workload</p>
+              <div className="conclusion-summary">
+                <span className="ch">ClickHouse → Full historical analytics</span>
+                <span className="es">Elasticsearch → Recent filtered analysis</span>
+              </div>
             </motion.div>
 
-            <motion.div variants={fadeInUp} className="repo-link">
-              <p>Thank you!</p>
+            <motion.div className="thank-you" variants={fadeInUp}>
+              <p>Thank you for your attention</p>
+              <p className="questions">Questions?</p>
             </motion.div>
           </motion.div>
         );
 
       default:
-        return null;
+        return (
+          <motion.div className="page" variants={staggerContainer} initial="initial" animate="animate">
+            <motion.h2 variants={fadeInUp}>Page Not Found</motion.h2>
+          </motion.div>
+        );
     }
   };
 
-
-
   return (
-    <div className="app">
-      {/* Navigation dots */}
+    <div className="app presentation-mode">
+      <div className="progress-bar">
+        <motion.div
+          className="progress-fill"
+          initial={{ width: 0 }}
+          animate={{ width: `${((currentPage + 1) / pages.length) * 100}%` }}
+          transition={{ duration: 0.3 }}
+        />
+      </div>
+
       <div className="nav-dots">
-        {pages.map((_, i) => (
+        {pages.map((page, i) => (
           <button
             key={i}
-            className={`dot ${i === currentPage ? 'active' : ''}`}
+            className={`dot ${i === currentPage ? 'active' : ''} ${i < currentPage ? 'completed' : ''}`}
             onClick={() => setCurrentPage(i)}
-            title={`Go to slide ${i + 1}`}
+            title={page.replace(/-/g, ' ')}
           />
         ))}
       </div>
 
-      {/* Page content */}
+      <AnimatePresence>
+        {showSpeakerNotes && (
+          <motion.div
+            className="speaker-notes"
+            initial={{ x: 300, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: 300, opacity: 0 }}
+          >
+            <h4>Speaker Notes</h4>
+            <p>{speakerNotes[pages[currentPage]] || 'No notes for this slide.'}</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <AnimatePresence mode="wait">
         <motion.div
           key={currentPage}
@@ -985,19 +1047,17 @@ function App() {
           initial="initial"
           animate="animate"
           exit="exit"
-          transition={{ duration: 0.5 }}
+          transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
           className="page-container"
         >
           {renderPage()}
         </motion.div>
       </AnimatePresence>
 
-      {/* Benchmark Detail Modal */}
       <AnimatePresence>
         {selectedBenchmark && renderBenchmarkModal()}
       </AnimatePresence>
 
-      {/* Navigation arrows */}
       <div className="nav-arrows">
         <button
           className="nav-arrow prev"

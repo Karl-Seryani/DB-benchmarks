@@ -7,22 +7,23 @@ const API_URL = 'http://localhost:5002/api';
 interface QueryResult {
   system: string;
   time_ms: number;
-  status: 'pending' | 'running' | 'completed';
+  status: 'pending' | 'running' | 'completed' | 'error';
   result_count?: number;
+  query?: any;
+  error?: string;
 }
 
 const BENCHMARKS = [
-  { id: 1, name: 'Simple Aggregation', description: 'COUNT and AVG grouped by department' },
-  { id: 2, name: 'Multi-Level GROUP BY', description: 'Multiple dimension grouping' },
-  { id: 3, name: 'Time-Series Aggregation', description: 'Daily aggregations over time' },
-  { id: 4, name: 'Filter + Aggregation', description: 'WHERE with aggregations' },
-  { id: 5, name: 'JOIN Performance', description: 'Cross-table joins' },
-  { id: 6, name: 'Complex Analytical Query', description: 'Subqueries and HAVING' },
-  { id: 7, name: 'Concurrent Load', description: '5 simultaneous queries' }
+  { id: 1, name: 'Simple Aggregation', description: 'Basic aggregations with COUNT, SUM, and AVG' },
+  { id: 2, name: 'Multi-Level GROUP BY', description: 'Multi-dimensional grouping by department and severity' },
+  { id: 3, name: 'Time-Series Aggregation', description: 'Daily aggregations across medical events' },
+  { id: 4, name: 'Filter + Aggregation', description: 'Time-filtered queries on recent data (last 7 days)' },
+  { id: 5, name: 'JOIN Performance', description: 'JOIN between patients and medical events' },
+  { id: 6, name: 'Complex Analytical Query', description: 'Subqueries with aggregations and HAVING clauses' }
 ];
 
 const LiveQueryDemo: React.FC = () => {
-  const [selectedDataset, setSelectedDataset] = useState<'healthcare' | 'nyc'>('healthcare');
+  const [selectedDataset, setSelectedDataset] = useState<'healthcare_1m' | 'healthcare_10m' | 'healthcare_100m'>('healthcare_1m');
   const [selectedBenchmark, setSelectedBenchmark] = useState(1);
   const [isRunning, setIsRunning] = useState(false);
   const [results, setResults] = useState<{clickhouse: QueryResult | null, elasticsearch: QueryResult | null}>({
@@ -32,7 +33,7 @@ const LiveQueryDemo: React.FC = () => {
 
   const runBenchmark = async () => {
     setIsRunning(true);
-    
+
     // Set initial pending state
     setResults({
       clickhouse: { system: 'ClickHouse', time_ms: 0, status: 'running' },
@@ -40,16 +41,30 @@ const LiveQueryDemo: React.FC = () => {
     });
 
     const benchmarkName = BENCHMARKS[selectedBenchmark - 1].name;
-    
+
     try {
       // Fetch the actual benchmark data
       const response = await fetch(`${API_URL}/benchmark/detail/${selectedDataset}/${encodeURIComponent(benchmarkName)}`);
+
+      // Check if data is available
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error('Coming Soon - Data Loading in Progress');
+        }
+        throw new Error(`Benchmark data not available (${response.status})`);
+      }
+
       const data = await response.json();
-      
+
+      // Check for error in response
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
       // Simulate one finishing before the other for visual effect
       // Show ClickHouse result first or second based on who actually won
       const chWon = data.clickhouse.avg_ms < data.elasticsearch.avg_ms;
-      
+
       if (chWon) {
         // ClickHouse finishes first
         setTimeout(() => {
@@ -59,11 +74,12 @@ const LiveQueryDemo: React.FC = () => {
               system: 'ClickHouse',
               time_ms: data.clickhouse.avg_ms,
               status: 'completed',
-              result_count: data.clickhouse.result_count
+              result_count: data.clickhouse.result_count,
+              query: data.clickhouse.query
             }
           }));
         }, 800);
-        
+
         setTimeout(() => {
           setResults(prev => ({
             ...prev,
@@ -71,7 +87,8 @@ const LiveQueryDemo: React.FC = () => {
               system: 'Elasticsearch',
               time_ms: data.elasticsearch.avg_ms,
               status: 'completed',
-              result_count: data.elasticsearch.result_count
+              result_count: data.elasticsearch.result_count,
+              query: data.elasticsearch.query
             }
           }));
           setIsRunning(false);
@@ -85,11 +102,12 @@ const LiveQueryDemo: React.FC = () => {
               system: 'Elasticsearch',
               time_ms: data.elasticsearch.avg_ms,
               status: 'completed',
-              result_count: data.elasticsearch.result_count
+              result_count: data.elasticsearch.result_count,
+              query: data.elasticsearch.query
             }
           }));
         }, 800);
-        
+
         setTimeout(() => {
           setResults(prev => ({
             ...prev,
@@ -97,7 +115,8 @@ const LiveQueryDemo: React.FC = () => {
               system: 'ClickHouse',
               time_ms: data.clickhouse.avg_ms,
               status: 'completed',
-              result_count: data.clickhouse.result_count
+              result_count: data.clickhouse.result_count,
+              query: data.clickhouse.query
             }
           }));
           setIsRunning(false);
@@ -105,9 +124,22 @@ const LiveQueryDemo: React.FC = () => {
       }
     } catch (error) {
       console.error('Error fetching benchmark data:', error);
+
+      // Show error state
+      const errorMessage = (error instanceof Error) ? error.message : 'Benchmark data not available';
       setResults({
-        clickhouse: { system: 'ClickHouse', time_ms: 0, status: 'pending' },
-        elasticsearch: { system: 'Elasticsearch', time_ms: 0, status: 'pending' }
+        clickhouse: {
+          system: 'ClickHouse',
+          time_ms: 0,
+          status: 'error',
+          error: errorMessage
+        },
+        elasticsearch: {
+          system: 'Elasticsearch',
+          time_ms: 0,
+          status: 'error',
+          error: errorMessage
+        }
       });
       setIsRunning(false);
     }
@@ -117,7 +149,8 @@ const LiveQueryDemo: React.FC = () => {
     switch(status) {
       case 'pending': return '⏳';
       case 'running': return '🔄';
-      case 'completed': return '✅';
+      case 'completed': return '✓';
+      case 'error': return '⚠️';
       default: return '';
     }
   };
@@ -129,7 +162,7 @@ const LiveQueryDemo: React.FC = () => {
   return (
     <div className="live-query-demo">
       <div className="demo-header">
-        <h2>🧪 Live Query Benchmark Lab</h2>
+        <h2>Live Query Benchmark Lab</h2>
         <p className="demo-subtitle">Run actual benchmarks and see results in real-time</p>
       </div>
 
@@ -138,26 +171,33 @@ const LiveQueryDemo: React.FC = () => {
           <label>Select Dataset</label>
           <div className="dataset-buttons">
             <button
-              className={selectedDataset === 'healthcare' ? 'active' : ''}
-              onClick={() => setSelectedDataset('healthcare')}
+              className={selectedDataset === 'healthcare_1m' ? 'active' : ''}
+              onClick={() => setSelectedDataset('healthcare_1m')}
               disabled={isRunning}
             >
-              Healthcare (160K rows)
+              Healthcare 1M
             </button>
             <button
-              className={selectedDataset === 'nyc' ? 'active' : ''}
-              onClick={() => setSelectedDataset('nyc')}
+              className={selectedDataset === 'healthcare_10m' ? 'active' : ''}
+              onClick={() => setSelectedDataset('healthcare_10m')}
               disabled={isRunning}
             >
-              NYC Taxi (13M rows)
+              Healthcare 10M
+            </button>
+            <button
+              className={selectedDataset === 'healthcare_100m' ? 'active' : ''}
+              onClick={() => setSelectedDataset('healthcare_100m')}
+              disabled={isRunning}
+            >
+              Healthcare 100M ⏳
             </button>
           </div>
         </div>
 
         <div className="control-group">
           <label>Select Benchmark</label>
-          <select 
-            value={selectedBenchmark} 
+          <select
+            value={selectedBenchmark}
             onChange={(e) => setSelectedBenchmark(parseInt(e.target.value))}
             disabled={isRunning}
           >
@@ -169,7 +209,7 @@ const LiveQueryDemo: React.FC = () => {
           </select>
         </div>
 
-        <button 
+        <button
           className="run-button"
           onClick={runBenchmark}
           disabled={isRunning}
@@ -180,7 +220,7 @@ const LiveQueryDemo: React.FC = () => {
 
       <AnimatePresence>
         {(results.clickhouse || results.elasticsearch) && (
-          <motion.div 
+          <motion.div
             className="results-section"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -188,7 +228,7 @@ const LiveQueryDemo: React.FC = () => {
           >
             <div className="results-grid">
               {/* ClickHouse Result */}
-              <motion.div 
+              <motion.div
                 className={`result-card ch ${results.clickhouse?.status === 'completed' && winner === 'ClickHouse' ? 'winner' : ''}`}
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -199,7 +239,7 @@ const LiveQueryDemo: React.FC = () => {
                 </div>
                 {results.clickhouse?.status === 'running' && (
                   <div className="loading-bar">
-                    <motion.div 
+                    <motion.div
                       className="loading-fill ch"
                       initial={{ width: 0 }}
                       animate={{ width: '100%' }}
@@ -215,13 +255,24 @@ const LiveQueryDemo: React.FC = () => {
                     )}
                   </>
                 )}
+                {results.clickhouse?.status === 'error' && (
+                  <div className="error-message" style={{
+                    color: '#ff6b6b',
+                    padding: '20px',
+                    fontSize: '14px',
+                    lineHeight: '1.6',
+                    textAlign: 'center'
+                  }}>
+                    {(results.clickhouse as any).error || 'Data not available'}
+                  </div>
+                )}
               </motion.div>
 
               {/* VS Badge */}
               <div className="vs-badge">VS</div>
 
               {/* Elasticsearch Result */}
-              <motion.div 
+              <motion.div
                 className={`result-card es ${results.elasticsearch?.status === 'completed' && winner === 'Elasticsearch' ? 'winner' : ''}`}
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -232,7 +283,7 @@ const LiveQueryDemo: React.FC = () => {
                 </div>
                 {results.elasticsearch?.status === 'running' && (
                   <div className="loading-bar">
-                    <motion.div 
+                    <motion.div
                       className="loading-fill es"
                       initial={{ width: 0 }}
                       animate={{ width: '100%' }}
@@ -248,11 +299,22 @@ const LiveQueryDemo: React.FC = () => {
                     )}
                   </>
                 )}
+                {results.elasticsearch?.status === 'error' && (
+                  <div className="error-message" style={{
+                    color: '#ff6b6b',
+                    padding: '20px',
+                    fontSize: '14px',
+                    lineHeight: '1.6',
+                    textAlign: 'center'
+                  }}>
+                    {(results.elasticsearch as any).error || 'Data not available'}
+                  </div>
+                )}
               </motion.div>
             </div>
 
-            {winner && results.clickhouse && results.elasticsearch && (
-              <motion.div 
+            {winner && results.clickhouse && results.elasticsearch && results.clickhouse.status === 'completed' && results.elasticsearch.status === 'completed' && (
+              <motion.div
                 className="winner-announcement"
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
@@ -262,10 +324,45 @@ const LiveQueryDemo: React.FC = () => {
                   🏆 {winner} Wins!
                 </div>
                 <div className="speedup">
-                  {winner === 'ClickHouse' 
+                  {winner === 'ClickHouse'
                     ? `${(results.elasticsearch.time_ms / results.clickhouse.time_ms).toFixed(2)}x faster`
                     : `${(results.clickhouse.time_ms / results.elasticsearch.time_ms).toFixed(2)}x faster`
                   }
+                </div>
+              </motion.div>
+            )}
+
+            {/* Show actual queries executed */}
+            {results.clickhouse && results.elasticsearch && results.clickhouse.status === 'completed' && results.elasticsearch.status === 'completed' && (
+              <motion.div
+                className="queries-section"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5 }}
+              >
+                <h3>Queries Executed</h3>
+                <div className="queries-grid">
+                  <div className="query-display ch">
+                    <div className="query-header">
+                      <span className="db-icon">⚡</span>
+                      <span>ClickHouse SQL</span>
+                    </div>
+                    <pre className="query-code">
+                      {(results.clickhouse as any).query || 'Query not available'}
+                    </pre>
+                  </div>
+                  <div className="query-display es">
+                    <div className="query-header">
+                      <span className="db-icon">🔍</span>
+                      <span>Elasticsearch DSL</span>
+                    </div>
+                    <pre className="query-code">
+                      {typeof (results.elasticsearch as any).query === 'object'
+                        ? JSON.stringify((results.elasticsearch as any).query, null, 2)
+                        : ((results.elasticsearch as any).query || 'Query not available')
+                      }
+                    </pre>
+                  </div>
                 </div>
               </motion.div>
             )}
@@ -274,7 +371,7 @@ const LiveQueryDemo: React.FC = () => {
       </AnimatePresence>
 
       <div className="data-note">
-        <div className="note-icon">✅</div>
+        <div className="note-icon">✓</div>
         <div className="note-text">
           <strong>Real Data:</strong> Results from actual benchmark measurements (5 runs averaged)
         </div>
@@ -284,4 +381,3 @@ const LiveQueryDemo: React.FC = () => {
 };
 
 export default LiveQueryDemo;
-

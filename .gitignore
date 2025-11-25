@@ -15,8 +15,7 @@ ENV/
 .pytest_cache/
 
 # Data files (large)
-data/datasets/*.csv
-data/datasets/*.parquet
+datasets/
 *.json
 results/benchmark_results.json
 
