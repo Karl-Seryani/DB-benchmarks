@@ -894,6 +894,12 @@ body {
 
 .winner-pill.ch { border-color: var(--ch-muted); }
 .winner-pill.es { border-color: var(--es-muted); }
+.winner-pill.not-possible { 
+  border-color: rgba(255, 100, 100, 0.3);
+  background: rgba(255, 100, 100, 0.08);
+}
+.winner-pill.not-possible .winner-count { color: #ff6b6b; }
+.winner-pill.not-possible .winner-label { color: rgba(255, 107, 107, 0.7); }
 
 .winner-count {
   font-size: 1.4rem;
@@ -1357,6 +1363,230 @@ body {
 }
 
 /* ============================================================
+   STORAGE COMPARISON PAGE
+   ============================================================ */
+
+.storage-comparison-page .storage-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  margin: 40px 0;
+}
+
+.storage-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px;
+  text-align: center;
+}
+
+.storage-card h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 20px;
+  color: var(--text);
+}
+
+.storage-comparison {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+}
+
+.db-storage {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  padding: 12px 16px;
+  background: var(--bg);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.db-storage.ch { border-color: var(--ch-muted); }
+.db-storage.es { border-color: var(--es-muted); }
+
+.db-storage .db-label {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.db-storage.ch .db-label { color: var(--ch); }
+.db-storage.es .db-label { color: var(--es); }
+
+.db-storage .db-size {
+  font-size: 14px;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text);
+}
+
+.compression-badge {
+  background: linear-gradient(135deg, var(--ch), var(--es));
+  color: white;
+  font-weight: 700;
+  font-size: 1.1rem;
+  padding: 8px 16px;
+  border-radius: 20px;
+}
+
+/* ============================================================
+   BENCHMARK CATEGORIES PAGE
+   ============================================================ */
+
+.benchmark-categories-page .categories-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  margin: 40px 0;
+}
+
+.category-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 28px;
+  text-align: left;
+}
+
+.category-card.fair { border-color: rgba(255, 255, 255, 0.15); }
+.category-card.ch { border-color: var(--ch-muted); }
+.category-card.es { border-color: var(--es-muted); }
+
+.category-icon {
+  font-size: 2rem;
+  margin-bottom: 12px;
+}
+
+.category-card h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.category-card.fair h3 { color: var(--text); }
+.category-card.ch h3 { color: var(--ch); }
+.category-card.es h3 { color: var(--es); }
+
+.category-card > p {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
+
+.category-card ul {
+  list-style: none;
+}
+
+.category-card li {
+  padding: 6px 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+  padding-left: 16px;
+  position: relative;
+}
+
+.category-card li::before {
+  content: '→';
+  position: absolute;
+  left: 0;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+/* ============================================================
+   CAPABILITIES COMPARISON PAGE
+   ============================================================ */
+
+.capabilities-page .capabilities-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 32px;
+  margin: 40px 0;
+}
+
+.capability-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 28px;
+  text-align: left;
+}
+
+.capability-card.ch { border-color: var(--ch-muted); }
+.capability-card.es { border-color: var(--es-muted); }
+
+.capability-card h3 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.capability-card.ch h3 { color: var(--ch); }
+.capability-card.es h3 { color: var(--es); }
+
+.can-do, .cannot-do {
+  margin-bottom: 16px;
+}
+
+.can-do h4, .cannot-do h4 {
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 10px;
+  letter-spacing: 0.5px;
+}
+
+.can-do h4 { color: #4ade80; }
+.cannot-do h4 { color: #f87171; }
+
+.capability-card ul {
+  list-style: none;
+}
+
+.capability-card li {
+  padding: 5px 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding-left: 14px;
+  position: relative;
+}
+
+.can-do li::before {
+  content: '✓';
+  position: absolute;
+  left: 0;
+  color: #4ade80;
+  font-size: 10px;
+}
+
+.cannot-do li::before {
+  content: '✗';
+  position: absolute;
+  left: 0;
+  color: #f87171;
+  font-size: 10px;
+}
+
+/* Winner pill highlight for category slides */
+.winner-pill.leading {
+  border-width: 2px;
+  transform: scale(1.05);
+}
+
+.winner-pill.ch.leading {
+  border-color: var(--ch);
+  box-shadow: 0 0 20px var(--ch-muted);
+}
+
+.winner-pill.es.leading {
+  border-color: var(--es);
+  box-shadow: 0 0 20px var(--es-muted);
+}
+
+/* ============================================================
    RESPONSIVE DESIGN
    ============================================================ */
 
@@ -1388,6 +1618,18 @@ body {
   .final-stats {
     flex-direction: column;
     gap: 28px;
+  }
+
+  .storage-comparison-page .storage-grid,
+  .benchmark-categories-page .categories-grid {
+    grid-template-columns: 1fr;
+    max-width: 400px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .capabilities-page .capabilities-grid {
+    grid-template-columns: 1fr;
   }
 }
 

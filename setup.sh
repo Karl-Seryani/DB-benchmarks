@@ -77,7 +77,7 @@ case $choice in
         echo -e "${GREEN}✅ Setup complete!${NC}"
         echo ""
         echo "Next steps:"
-        echo "  ./start.sh    # To start both servers"
+        echo "  ./setup.sh    # Select option 4 to start both servers"
         ;;
     
     2)
@@ -169,9 +169,6 @@ case $choice in
         # Test if backend is running
         if curl -s http://localhost:5002/api/health > /dev/null; then
             echo -e "${GREEN}✅ Backend is healthy${NC}"
-            echo ""
-            echo "Opening presentation..."
-            open presentation_slides.html
             echo ""
             echo "Opening dashboard in browser..."
             sleep 2
