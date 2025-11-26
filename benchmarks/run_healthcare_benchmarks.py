@@ -331,12 +331,13 @@ def get_clickhouse_strength_benchmarks(database, index_prefix):
             'es_limitation': 'Elasticsearch cannot execute subqueries. Requires multiple API calls and application-side logic to compute dynamic thresholds.'
         },
 
-        # 8. Advanced SQL (HAVING + ORDER BY aggregate)
+        # 8. Advanced SQL (HAVING + ORDER BY aggregate) - ES CANNOT DO THIS EQUIVALENTLY
         'advanced_sql': {
             'name': 'Advanced SQL Features',
             'category': 'clickhouse_strength',
-            'description': 'HAVING clause + ORDER BY aggregate + LIMIT - complex SQL features',
-            'why_ch_wins': 'Native SQL with HAVING, complex ORDER BY, and precise LIMIT control.',
+            'description': 'HAVING clause + exact percentiles + ORDER BY aggregate + precise LIMIT',
+            'why_ch_wins': 'Native SQL with HAVING, exact percentile calculations, complex ORDER BY, and precise LIMIT control.',
+            'es_not_possible': True,  # Flag: ES cannot do equivalent operation
             'clickhouse': f"""
                 SELECT
                     department,
@@ -350,31 +351,9 @@ def get_clickhouse_strength_benchmarks(database, index_prefix):
                 ORDER BY avg_cost DESC
                 LIMIT 25
             """,
-            'elasticsearch': {
-                'size': 0,
-                'aggs': {
-                    'by_department': {
-                        'terms': {'field': 'department', 'size': 20},
-                        'aggs': {
-                            'by_severity': {
-                                'terms': {'field': 'severity', 'size': 5},
-                                'aggs': {
-                                    'avg_cost': {'avg': {'field': 'cost_usd'}},
-                                    'p95_cost': {'percentiles': {'field': 'cost_usd', 'percents': [95]}},
-                                    'having_filter': {
-                                        'bucket_selector': {
-                                            'buckets_path': {'count': '_count'},
-                                            'script': 'params.count > 1000'
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            'es_index': f'{index_prefix}_medical_events',
-            'es_limitation': 'ES bucket_selector is less flexible than SQL HAVING'
+            'elasticsearch': None,  # Not possible equivalently
+            'es_index': None,
+            'es_limitation': 'Elasticsearch cannot do: (1) Exact percentiles (uses TDigest approximation), (2) True HAVING semantics (bucket_selector is limited), (3) Precise ORDER BY aggregate + LIMIT. These SQL features have no equivalent in ES.'
         }
     }
 

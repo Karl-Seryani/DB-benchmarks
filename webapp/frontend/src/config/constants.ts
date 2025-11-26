@@ -111,10 +111,11 @@ export const BENCHMARK_INFO: Record<string, {
   'Advanced SQL Features': {
     title: 'Advanced SQL Features',
     category: 'clickhouse_strength',
-    description: 'HAVING clause + ORDER BY aggregate + percentiles',
+    description: 'HAVING clause + exact percentiles + ORDER BY aggregate + precise LIMIT',
     sql: 'SELECT department, COUNT(*) as cnt, quantile(0.95)(cost_usd) FROM medical_events GROUP BY department HAVING cnt > 1000 ORDER BY cnt DESC LIMIT 25',
     tests: 'Complex SQL with HAVING, aggregate ordering, and statistical functions.',
-    whyWins: 'Native SQL with HAVING, complex ORDER BY, and built-in quantile functions.'
+    whyWins: 'ClickHouse supports exact percentiles, true HAVING semantics, and precise ORDER BY + LIMIT. Elasticsearch can only approximate these.',
+    limitation: 'ES cannot do: (1) Exact percentiles (uses TDigest approximation), (2) True HAVING semantics (bucket_selector is limited), (3) Precise ORDER BY aggregate + LIMIT'
   },
 
   // ===== ELASTICSEARCH STRENGTHS =====

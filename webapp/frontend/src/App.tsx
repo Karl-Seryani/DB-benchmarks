@@ -6,14 +6,8 @@ import {
   ResponsiveContainer
 } from 'recharts';
 import { InteractiveTerminal } from './components/InteractiveTerminal';
-import { API_URL, COLORS, CHART_THEME, BENCHMARK_INFO, CAPABILITY_COMPARISON } from './config/constants';
+import { API_URL, COLORS, CHART_THEME, BENCHMARK_INFO } from './config/constants';
 import './App.css';
-
-interface BenchmarkResult {
-  system: string;
-  benchmark: string;
-  avg_ms: number;
-}
 
 // Cinematic page transitions
 const pageVariants = {
@@ -55,6 +49,7 @@ function App() {
   const [scalabilityData, setScalabilityData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showSpeakerNotes, setShowSpeakerNotes] = useState(false);
+  const [selectedScale, setSelectedScale] = useState<'1m' | '10m' | '100m'>('100m');
 
   const pages = [
     'intro',
@@ -130,43 +125,56 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [pages.length]);
 
+  // Sync selectedScale with available data (Bug fix: prevent active+disabled state)
+  useEffect(() => {
+    const availableScales: ('100m' | '10m' | '1m')[] = [];
+    if (healthcare100mData) availableScales.push('100m');
+    if (healthcare10mData) availableScales.push('10m');
+    if (healthcare1mData) availableScales.push('1m');
+    
+    // If current selection is not available, switch to first available
+    if (availableScales.length > 0 && !availableScales.includes(selectedScale)) {
+      setSelectedScale(availableScales[0]);
+    }
+  }, [healthcare1mData, healthcare10mData, healthcare100mData, selectedScale]);
+
   // Memoized function to extract benchmark data for a specific benchmark
   const getBenchmarkData = useMemo(() => {
     return (data: any, benchmarkName: string) => {
       if (!data?.benchmarks) return null;
 
-      if (Array.isArray(data.benchmarks)) {
-        const ch = data.benchmarks.find((b: BenchmarkResult) => b.system === 'ClickHouse' && b.benchmark === benchmarkName);
-        const es = data.benchmarks.find((b: BenchmarkResult) => b.system === 'Elasticsearch' && b.benchmark === benchmarkName);
-        if (!ch || !es) return null;
-        return {
-          name: benchmarkName.replace(' Aggregation', '').replace(' Performance', '').replace(' Query', ''),
-          ClickHouse: ch.avg_ms,
-          Elasticsearch: es.avg_ms,
-          winner: ch.avg_ms < es.avg_ms ? 'ClickHouse' : 'Elasticsearch',
-          speedup: ch.avg_ms < es.avg_ms ? (es.avg_ms / ch.avg_ms).toFixed(1) : (ch.avg_ms / es.avg_ms).toFixed(1),
-          chQuery: null,
-          esQuery: null
-        };
-      } else {
-        const benchmarkKey = Object.keys(data.benchmarks).find(key => {
-          const bench = data.benchmarks[key];
-          return bench.name === benchmarkName;
-        });
-
-        if (!benchmarkKey) return null;
-        const benchmark = data.benchmarks[benchmarkKey];
-
-        return {
-          name: benchmark.name.replace(' Aggregation', '').replace(' Performance', '').replace(' Query', '').replace(' Window', ''),
-          ClickHouse: benchmark.clickhouse.avg_time,
-          Elasticsearch: benchmark.elasticsearch.avg_time,
-          winner: benchmark.winner === 'clickhouse' ? 'ClickHouse' : 'Elasticsearch',
-          speedup: benchmark.speedup.toFixed(1),
-          chQuery: benchmark.clickhouse.query || null,
-          esQuery: benchmark.elasticsearch.query || null
-        };
+      // Search through all categories for the benchmark
+      let benchmark = null;
+      for (const category of ['fair', 'clickhouse_strength', 'elasticsearch_strength']) {
+        if (data.benchmarks[category]) {
+          const found = Object.values(data.benchmarks[category]).find(
+            (b: any) => b.name === benchmarkName
+          );
+          if (found) {
+            benchmark = found as any;
+            break;
+          }
+        }
       }
+
+      if (!benchmark) return null;
+
+      const esNotPossible = benchmark.es_not_possible || benchmark.elasticsearch?.not_possible;
+      
+        return {
+        name: benchmark.name.replace(' Aggregation', '').replace(' Performance', '').replace(' Query', '').replace(' Analysis', '').replace(' Features', ''),
+        fullName: benchmark.name,
+        ClickHouse: benchmark.clickhouse?.avg_time || 0,
+        Elasticsearch: esNotPossible ? null : (benchmark.elasticsearch?.avg_time || 0),
+        esNotPossible: esNotPossible,
+        winner: benchmark.winner === 'clickhouse' ? 'ClickHouse' : 'Elasticsearch',
+        speedup: benchmark.speedup ? benchmark.speedup.toFixed(1) : 'N/A',
+        chQuery: benchmark.clickhouse?.query || null,
+        esQuery: esNotPossible ? null : (benchmark.elasticsearch?.query || null),
+        esLimitation: benchmark.es_limitation || benchmark.elasticsearch?.limitation || null,
+        whyWins: benchmark.why_ch_wins || benchmark.why_es_wins || null,
+        category: benchmark.category
+      };
     };
   }, []);
 
@@ -186,7 +194,7 @@ function App() {
             name: benchmark.name.replace(' Aggregation', '').replace(' Performance', '').replace(' Query', '').replace(' Analysis', '').replace(' Features', ''),
             fullName: benchmark.name,
             ClickHouse: benchmark.clickhouse.avg_time,
-            Elasticsearch: esNotPossible ? 0 : (benchmark.elasticsearch?.avg_time || 0),
+            Elasticsearch: esNotPossible ? null : (benchmark.elasticsearch?.avg_time || 0),
             esNotPossible: esNotPossible,
             winner: benchmark.winner === 'clickhouse' ? 'ClickHouse' : 'Elasticsearch',
             speedup: benchmark.speedup ? benchmark.speedup.toFixed(1) : (esNotPossible ? 'N/A' : '1.0'),
@@ -197,39 +205,6 @@ function App() {
       return results;
     };
   }, []);
-
-  // Memoized function to get all benchmark data for charts (legacy support)
-  const getAllBenchmarkData = useMemo(() => {
-    return (data: any): any[] => {
-      if (!data?.benchmarks) return [];
-
-      // Handle new category-based structure
-      if (data.benchmarks.fair || data.benchmarks.clickhouse_strength || data.benchmarks.elasticsearch_strength) {
-        const results: any[] = [];
-        ['fair', 'clickhouse_strength', 'elasticsearch_strength'].forEach(category => {
-          results.push(...getBenchmarksByCategory(data, category as any));
-        });
-        return results;
-      }
-
-      // Legacy structure support
-      const results: any[] = [];
-      Object.keys(data.benchmarks).forEach(key => {
-        const benchmark = data.benchmarks[key];
-        if (benchmark?.clickhouse && benchmark?.elasticsearch) {
-          results.push({
-            name: benchmark.name.replace(' Aggregation', '').replace(' Performance', '').replace(' Query', '').replace(' Analysis', '').replace(' Window', ''),
-            fullName: benchmark.name,
-            ClickHouse: benchmark.clickhouse.avg_time,
-            Elasticsearch: benchmark.elasticsearch.avg_time,
-            winner: benchmark.winner === 'clickhouse' ? 'ClickHouse' : 'Elasticsearch',
-            speedup: benchmark.speedup ? benchmark.speedup.toFixed(1) : '1.0'
-          });
-        }
-      });
-      return results;
-    };
-  }, [getBenchmarksByCategory]);
 
   // Interactive Benchmark State
   const [selectedBenchmark, setSelectedBenchmark] = useState<string | null>(null);
@@ -248,21 +223,15 @@ function App() {
     if (!selectedBenchmark) return null;
 
     const info = BENCHMARK_INFO[selectedBenchmark];
-    const currentPageName = pages[currentPage];
-    const is100m = currentPageName.includes('100m');
-    const is10m = currentPageName.includes('10m') && !is100m;
-
-    let data, datasetLabel;
-    if (is100m) {
-      data = healthcare100mData;
-      datasetLabel = 'Healthcare Dataset (100M rows)';
-    } else if (is10m) {
-      data = healthcare10mData;
-      datasetLabel = 'Healthcare Dataset (10M rows)';
-    } else {
-      data = healthcare1mData;
-      datasetLabel = 'Healthcare Dataset (1M rows)';
-    }
+    
+    // Use the selected scale for modal data
+    const dataMap = {
+      '1m': healthcare1mData,
+      '10m': healthcare10mData,
+      '100m': healthcare100mData
+    };
+    const data = dataMap[selectedScale] || healthcare100mData || healthcare10mData || healthcare1mData;
+    const datasetLabel = `Healthcare Dataset (${selectedScale.toUpperCase()} rows)`;
 
     const benchmarkData = getBenchmarkData(data, selectedBenchmark);
 
@@ -294,8 +263,22 @@ function App() {
 
           <div className="modal-content-grid">
             <div className="modal-chart-section">
+              {benchmarkData.esNotPossible ? (
+                /* ES Not Possible - Show single bar with indicator */
+                <div className="single-result-display">
+                  <div className="timing-row ch">
+                    <span className="timing-label">ClickHouse</span>
+                    <span className="timing-value">{benchmarkData.ClickHouse?.toFixed(1)} ms</span>
+                  </div>
+                  <div className="timing-row es-not-possible">
+                    <span className="timing-label">Elasticsearch</span>
+                    <span className="timing-value not-possible">❌ Not Possible</span>
+                  </div>
+                </div>
+              ) : (
+                /* Normal comparison chart */
               <div className="chart-wrapper single-benchmark">
-                <ResponsiveContainer width="100%" height={250}>
+                  <ResponsiveContainer width="100%" height={200}>
                   <BarChart data={chartData} layout="vertical" margin={{ top: 20, right: 40, left: 10, bottom: 10 }}>
                     <defs>
                       <linearGradient id={modalChGradientId} x1="0" y1="0" x2="1" y2="1">
@@ -325,12 +308,13 @@ function App() {
                   </BarChart>
                 </ResponsiveContainer>
               </div>
+              )}
 
               <div className="benchmark-result modal-result">
-                <div className={`winner-badge ${benchmarkData.winner === 'Elasticsearch' ? 'es-winner' : ''}`}>
-                  <div className="winner-label">WINNER</div>
-                  <div className="winner-name">{benchmarkData.winner}</div>
-                  <div className="winner-speedup">{benchmarkData.speedup}x faster</div>
+                <div className={`winner-badge ${benchmarkData.winner === 'Elasticsearch' ? 'es-winner' : ''} ${benchmarkData.esNotPossible ? 'es-not-possible' : ''}`}>
+                  <div className="winner-label">{benchmarkData.esNotPossible ? 'RESULT' : 'WINNER'}</div>
+                  <div className="winner-name">{benchmarkData.esNotPossible ? 'ClickHouse Only' : benchmarkData.winner}</div>
+                  <div className="winner-speedup">{benchmarkData.esNotPossible ? 'ES Cannot Perform' : (benchmarkData.speedup === 'N/A' ? 'N/A' : `${benchmarkData.speedup}x faster`)}</div>
                 </div>
               </div>
             </div>
@@ -341,25 +325,34 @@ function App() {
                 <p>{info.description}</p>
               </div>
 
-              {benchmarkData.chQuery ? (
-                <>
+              {/* Why this system wins */}
+              {benchmarkData.whyWins && (
+                <div className="info-block why-wins">
+                  <h4>💡 Why</h4>
+                  <p>{benchmarkData.whyWins}</p>
+                </div>
+              )}
+
+              {/* ClickHouse Query */}
                   <div className="info-block">
                     <h4>ClickHouse Query</h4>
-                    <code className="benchmark-sql copyable">{benchmarkData.chQuery}</code>
+                <code className="benchmark-sql copyable">{benchmarkData.chQuery || info.sql}</code>
                   </div>
+
+              {/* Elasticsearch Query or Limitation */}
+              {benchmarkData.esNotPossible ? (
+                <div className="info-block es-limitation">
+                  <h4>❌ Elasticsearch Cannot Do This</h4>
+                  <p className="limitation-text">{benchmarkData.esLimitation || 'This operation is not supported by Elasticsearch.'}</p>
+                </div>
+              ) : (
                   <div className="info-block">
                     <h4>Elasticsearch Query</h4>
                     <code className="benchmark-sql copyable es-query">{
                       typeof benchmarkData.esQuery === 'object'
                         ? JSON.stringify(benchmarkData.esQuery, null, 2)
-                        : benchmarkData.esQuery
+                      : (benchmarkData.esQuery || 'N/A')
                     }</code>
-                  </div>
-                </>
-              ) : (
-                <div className="info-block">
-                  <h4>SQL Query</h4>
-                  <code className="benchmark-sql">{info.sql}</code>
                 </div>
               )}
 
@@ -374,233 +367,23 @@ function App() {
     );
   };
 
-  // Enhanced Storage Slide with Visual Impact
-  const renderStorageSlide = (datasetKey: string, title: string, subtitle: string, rowCount: string) => {
-    if (!storageData || !storageData[datasetKey]) {
-      return (
-        <motion.div className="page storage-page" variants={staggerContainer} initial="initial" animate="animate">
-          <motion.h2 variants={fadeInUp}>{title}</motion.h2>
-          <motion.p variants={fadeInUp} className="page-subtitle">{subtitle}</motion.p>
-          <motion.div variants={fadeInUp} className="loading-placeholder">
-            <div className="pulse-circle"></div>
-            <p>{datasetKey === 'healthcare_100m' ? 'Coming Soon - Data Loading in Progress...' : 'Loading storage data...'}</p>
-          </motion.div>
-        </motion.div>
-      );
-    }
-
-    const storage = storageData[datasetKey];
-    const chTotal = storage.clickhouse_mb / 1024;
-    const esTotal = storage.elasticsearch_mb / 1024;
-    const compressionRatio = storage.compression_ratio;
-
-    return (
-      <motion.div className="page storage-page-new" variants={staggerContainer} initial="initial" animate="animate">
-        <motion.div className="slide-header" variants={fadeInUp}>
-          <span className="slide-number">{currentPage + 1}</span>
-          <h2>{title}</h2>
-          <p className="page-subtitle">{subtitle} • {rowCount}</p>
-        </motion.div>
-
-        <div className="storage-content-grid">
-          <motion.div className="storage-visual-section" variants={slideInLeft}>
-            <div className="storage-bars-visual">
-              <div className="bar-item">
-                <div className="bar-label">
-                  <span className="db-name ch">ClickHouse</span>
-                  <span className="bar-value">{chTotal < 1 ? `${(chTotal * 1024).toFixed(1)} MB` : `${chTotal.toFixed(2)} GB`}</span>
-                </div>
-                <div className="bar-track">
-                  <motion.div
-                    className="bar-fill ch"
-                    initial={{ width: 0 }}
-                    animate={{ width: `${(chTotal / esTotal) * 100}%` }}
-                    transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1], delay: 0.3 }}
-                  />
-                </div>
-              </div>
-              <div className="bar-item">
-                <div className="bar-label">
-                  <span className="db-name es">Elasticsearch</span>
-                  <span className="bar-value">{esTotal < 1 ? `${(esTotal * 1024).toFixed(1)} MB` : `${esTotal.toFixed(2)} GB`}</span>
-                </div>
-                <div className="bar-track">
-                  <motion.div
-                    className="bar-fill es"
-                    initial={{ width: 0 }}
-                    animate={{ width: '100%' }}
-                    transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1], delay: 0.5 }}
-                  />
-                </div>
-              </div>
-            </div>
-          </motion.div>
-
-          <motion.div className="compression-highlight" variants={scaleIn}>
-            <div className="compression-circle">
-              <motion.span
-                className="compression-number"
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ duration: 0.6, delay: 0.8, type: "spring", stiffness: 200 }}
-              >
-                {compressionRatio}x
-              </motion.span>
-              <span className="compression-label">Better Compression</span>
-            </div>
-            <p className="compression-winner">ClickHouse Advantage</p>
-          </motion.div>
-        </div>
-
-        <motion.div className="slide-insight" variants={fadeInUp}>
-          {datasetKey === 'healthcare_1m' && (
-            <p><strong>{compressionRatio}x compression</strong> means significant cloud storage cost savings</p>
-          )}
-          {datasetKey === 'healthcare_10m' && (
-            <p>Compression advantage <strong>increases with scale</strong> - columnar storage shines</p>
-          )}
-          {datasetKey === 'healthcare_100m' && (
-            <p><strong>At enterprise scale:</strong> Compression differences translate to massive cost savings</p>
-          )}
-        </motion.div>
-      </motion.div>
-    );
-  };
-
-  // Enhanced Summary Slide
-  const renderSummarySlide = (data: any, title: string, subtitle: string) => {
-    if (!data) {
-      return (
-        <motion.div className="page summary-page" variants={staggerContainer} initial="initial" animate="animate">
-          <motion.div className="slide-header" variants={fadeInUp}>
-            <span className="slide-number">{currentPage + 1}</span>
-            <h2>{title}</h2>
-            <p className="page-subtitle">{subtitle}</p>
-          </motion.div>
-          <motion.div variants={fadeInUp} className="loading-placeholder">
-            <p>{title.includes('100M') ? 'Coming Soon - Data Loading in Progress...' : 'Run benchmarks to see results'}</p>
-          </motion.div>
-        </motion.div>
-      );
-    }
-
-    const chartData = getAllBenchmarkData(data);
-    const gradientSuffix = title.toLowerCase().replace(/[^a-z0-9]/gi, '-');
-    const summaryChGradientId = `summary-ch-${gradientSuffix}`;
-    const summaryEsGradientId = `summary-es-${gradientSuffix}`;
-
-    if (chartData.length === 0) {
-      return (
-        <motion.div className="page summary-page" variants={staggerContainer} initial="initial" animate="animate">
-          <motion.div className="slide-header" variants={fadeInUp}>
-            <span className="slide-number">{currentPage + 1}</span>
-            <h2>{title}</h2>
-            <p className="page-subtitle">{subtitle}</p>
-          </motion.div>
-          <motion.div variants={fadeInUp} className="loading-placeholder">
-            <p>No benchmark data available</p>
-          </motion.div>
-        </motion.div>
-      );
-    }
-
-    // Calculate winners
-    const chWins = chartData.filter((d: any) => d?.winner === 'ClickHouse').length;
-    const esWins = chartData.filter((d: any) => d?.winner === 'Elasticsearch').length;
-
-    return (
-      <motion.div className="page summary-page-new" variants={staggerContainer} initial="initial" animate="animate">
-        <motion.div className="slide-header" variants={fadeInUp}>
-          <span className="slide-number">{currentPage + 1}</span>
-          <h2>{title}</h2>
-          <p className="page-subtitle">{subtitle}</p>
-        </motion.div>
-
-        <motion.div className="winner-summary" variants={fadeInUp}>
-          <div className="winner-pill ch">
-            <span className="winner-count">{chWins}</span>
-            <span className="winner-label">ClickHouse Wins</span>
-          </div>
-          <div className="winner-pill es">
-            <span className="winner-count">{esWins}</span>
-            <span className="winner-label">Elasticsearch Wins</span>
-          </div>
-        </motion.div>
-
-        <motion.div variants={fadeInUp} className="chart-wrapper interactive-chart">
-          <div className="interaction-hint">Click any bar for details</div>
-          <ResponsiveContainer width="100%" height={450}>
-            <BarChart
-              data={chartData}
-              layout="vertical"
-              margin={{ top: 20, right: 30, left: 120, bottom: 20 }}
-            >
-              <defs>
-                <linearGradient id={summaryChGradientId} x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0%" stopColor={COLORS.clickhouse} stopOpacity={0.25} />
-                  <stop offset="100%" stopColor={COLORS.clickhouse} stopOpacity={0.9} />
-                </linearGradient>
-                <linearGradient id={summaryEsGradientId} x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0%" stopColor={COLORS.elasticsearch} stopOpacity={0.25} />
-                  <stop offset="100%" stopColor={COLORS.elasticsearch} stopOpacity={0.9} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.grid} horizontal={false} />
-              <XAxis
-                type="number"
-                stroke={CHART_THEME.axisMuted}
-                tick={{ fontSize: 11, fill: CHART_THEME.axisMuted }}
-                tickFormatter={(value) => `${value.toFixed(0)}ms`}
-              />
-              <YAxis
-                dataKey="name"
-                type="category"
-                stroke={CHART_THEME.axisMuted}
-                tick={{ fontSize: 11, fill: CHART_THEME.axis }}
-                width={110}
-              />
-              <Tooltip
-                cursor={{ fill: 'rgba(217, 168, 100, 0.08)' }}
-                contentStyle={{
-                  backgroundColor: CHART_THEME.tooltipBg,
-                  border: `1px solid ${CHART_THEME.tooltipBorder}`,
-                  borderRadius: 12,
-                  color: CHART_THEME.axis
-                }}
-                formatter={(value: number) => [`${value.toFixed(1)} ms`]}
-              />
-              <Legend verticalAlign="top" height={36} wrapperStyle={{ color: CHART_THEME.axisMuted }} />
-              <Bar
-                dataKey="ClickHouse"
-                fill={`url(#${summaryChGradientId})`}
-                radius={[0, 6, 6, 0]}
-                onClick={handleBarClick}
-                style={{ cursor: 'pointer' }}
-                barSize={18}
-              />
-              <Bar
-                dataKey="Elasticsearch"
-                fill={`url(#${summaryEsGradientId})`}
-                radius={[0, 6, 6, 0]}
-                barSize={18}
-                onClick={handleBarClick}
-                style={{ cursor: 'pointer' }}
-              />
-            </BarChart>
-          </ResponsiveContainer>
-        </motion.div>
-
-        <motion.div variants={fadeInUp} className="slide-insight">
-          <p>Lower bars = faster performance</p>
-        </motion.div>
-      </motion.div>
-    );
-  };
-
   // Category-based benchmark slide
   const renderCategorySlide = (category: 'fair' | 'clickhouse_strength' | 'elasticsearch_strength', title: string, subtitle: string) => {
-    // Use the largest available dataset
-    const data = healthcare100mData || healthcare10mData || healthcare1mData;
+    // Get data based on selected scale
+    const dataMap = {
+      '1m': healthcare1mData,
+      '10m': healthcare10mData,
+      '100m': healthcare100mData
+    };
+    const data = dataMap[selectedScale] || healthcare100mData || healthcare10mData || healthcare1mData;
+    const scaleLabel = data === healthcare1mData ? '1M' : data === healthcare10mData ? '10M' : '100M';
+    
+    // Determine which scales are available
+    const availableScales = {
+      '1m': !!healthcare1mData,
+      '10m': !!healthcare10mData,
+      '100m': !!healthcare100mData
+    };
     
     if (!data) {
       return (
@@ -618,7 +401,7 @@ function App() {
     }
 
     const chartData = getBenchmarksByCategory(data, category);
-    const gradientSuffix = category;
+    const gradientSuffix = `${category}-${selectedScale}`;
     const categoryChGradientId = `cat-ch-${gradientSuffix}`;
     const categoryEsGradientId = `cat-es-${gradientSuffix}`;
 
@@ -648,6 +431,24 @@ function App() {
           <span className="slide-number">{currentPage + 1}</span>
           <h2>{title}</h2>
           <p className="page-subtitle">{subtitle}</p>
+        </motion.div>
+
+        {/* Dataset Scale Selector */}
+        <motion.div className="scale-selector" variants={fadeInUp}>
+          <span className="scale-label">Dataset:</span>
+          <div className="scale-buttons">
+            {(['1m', '10m', '100m'] as const).map((scale) => (
+              <button
+                key={scale}
+                className={`scale-btn ${selectedScale === scale ? 'active' : ''} ${!availableScales[scale] ? 'disabled' : ''}`}
+                onClick={() => availableScales[scale] && setSelectedScale(scale)}
+                disabled={!availableScales[scale]}
+              >
+                {scale.toUpperCase()}
+              </button>
+            ))}
+          </div>
+          <span className="current-scale">Showing: {scaleLabel} rows</span>
         </motion.div>
 
         <motion.div className="winner-summary" variants={fadeInUp}>
@@ -707,7 +508,10 @@ function App() {
                   borderRadius: 12,
                   color: CHART_THEME.axis
                 }}
-                formatter={(value: number) => [`${value.toFixed(1)} ms`]}
+                formatter={(value: any, name: string) => {
+                  if (value === null || value === undefined) return ['❌ Not Possible', name];
+                  return [`${Number(value).toFixed(1)} ms`, name];
+                }}
               />
               <Legend verticalAlign="top" height={36} wrapperStyle={{ color: CHART_THEME.axisMuted }} />
               <Bar
@@ -1143,57 +947,84 @@ function App() {
 
       case 'capabilities-comparison':
         return (
-          <motion.div className="page capabilities-page" variants={staggerContainer} initial="initial" animate="animate">
+          <motion.div className="page capabilities-page-detailed" variants={staggerContainer} initial="initial" animate="animate">
             <motion.div className="slide-header" variants={fadeInUp}>
               <span className="slide-number">{currentPage + 1}</span>
-              <h2>Capabilities Comparison</h2>
-              <p className="page-subtitle">What each system CAN and CANNOT do</p>
+              <h2>Why "ES Not Possible" in ClickHouse Strengths</h2>
+              <p className="page-subtitle">These aren't performance differences - they're fundamental architectural limitations</p>
             </motion.div>
 
-            <div className="capabilities-grid">
-              <motion.div className="capability-card ch" variants={slideInLeft}>
-                <h3>ClickHouse</h3>
-                <div className="can-do">
-                  <h4>✅ Can Do</h4>
-                  <ul>
-                    {CAPABILITY_COMPARISON.clickhouse_can.slice(0, 5).map((item, i) => (
-                      <li key={i}>{item}</li>
-                    ))}
-                  </ul>
+            {/* ES Cannot Do Grid - Visual Explanation */}
+            <div className="es-limitations-grid">
+              <motion.div className="limitation-card" variants={slideInLeft}>
+                <div className="limitation-header">
+                  <span className="limitation-icon">🔗</span>
+                  <h3>JOINs</h3>
                 </div>
-                <div className="cannot-do">
-                  <h4>❌ Cannot Do</h4>
-                  <ul>
-                    {CAPABILITY_COMPARISON.clickhouse_cannot.slice(0, 4).map((item, i) => (
-                      <li key={i}>{item}</li>
-                    ))}
-                  </ul>
+                <div className="comparison-box">
+                  <div className="ch-side">
+                    <span className="label">ClickHouse ✅</span>
+                    <code>SELECT * FROM patients p<br/>JOIN events e ON p.id = e.patient_id</code>
+                  </div>
+                  <div className="es-side">
+                    <span className="label">Elasticsearch ❌</span>
+                    <span className="reason">No JOIN capability.<br/>Requires denormalization or 2+ API calls + app-side logic.</span>
+                  </div>
                 </div>
               </motion.div>
 
-              <motion.div className="capability-card es" variants={slideInRight}>
-                <h3>Elasticsearch</h3>
-                <div className="can-do">
-                  <h4>✅ Can Do</h4>
-                  <ul>
-                    {CAPABILITY_COMPARISON.elasticsearch_can.slice(0, 5).map((item, i) => (
-                      <li key={i}>{item}</li>
-                    ))}
-                  </ul>
+              <motion.div className="limitation-card" variants={fadeInUp}>
+                <div className="limitation-header">
+                  <span className="limitation-icon">🔄</span>
+                  <h3>Subqueries</h3>
                 </div>
-                <div className="cannot-do">
-                  <h4>❌ Cannot Do</h4>
-                  <ul>
-                    {CAPABILITY_COMPARISON.elasticsearch_cannot.slice(0, 4).map((item, i) => (
-                      <li key={i}>{item}</li>
-                    ))}
-                  </ul>
+                <div className="comparison-box">
+                  <div className="ch-side">
+                    <span className="label">ClickHouse ✅</span>
+                    <code>WHERE cost &gt; (<br/>  SELECT AVG(cost) FROM events<br/>)</code>
+                  </div>
+                  <div className="es-side">
+                    <span className="label">Elasticsearch ❌</span>
+                    <span className="reason">No subquery support.<br/>Must run 2 queries: first to get AVG, then filter by it.</span>
+                  </div>
+                </div>
+              </motion.div>
+
+              <motion.div className="limitation-card" variants={slideInRight}>
+                <div className="limitation-header">
+                  <span className="limitation-icon">📊</span>
+                  <h3>Advanced SQL</h3>
+                </div>
+                <div className="comparison-box">
+                  <div className="ch-side">
+                    <span className="label">ClickHouse ✅</span>
+                    <code>HAVING count &gt; 1000<br/>quantile(0.95)(cost)<br/>ORDER BY avg_cost LIMIT 25</code>
+                  </div>
+                  <div className="es-side">
+                    <span className="label">Elasticsearch ❌</span>
+                    <span className="reason">• HAVING → bucket_selector (limited)<br/>• Percentiles → TDigest (approximate)<br/>• ORDER BY agg → Not precise</span>
+                  </div>
                 </div>
               </motion.div>
             </div>
 
+            {/* Visual Summary */}
+            <motion.div className="capability-summary" variants={fadeInUp}>
+              <div className="summary-row">
+                <div className="summary-item ch">
+                  <span className="count">3</span>
+                  <span className="desc">Benchmarks ES<br/>Cannot Perform</span>
+                </div>
+                <div className="summary-divider">|</div>
+                <div className="summary-item">
+                  <span className="highlight">This isn't about speed.</span>
+                  <span className="desc">ES literally cannot execute<br/>these operations equivalently.</span>
+                </div>
+              </div>
+            </motion.div>
+
             <motion.div className="slide-insight" variants={fadeInUp}>
-              <p><strong>Key insight:</strong> Architecture determines capability - you can't optimize away fundamental limitations</p>
+              <p><strong>Architectural truth:</strong> Elasticsearch is built on Lucene for search, not for relational SQL operations. These aren't "slow" - they're impossible.</p>
             </motion.div>
           </motion.div>
         );

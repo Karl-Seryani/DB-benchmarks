@@ -875,6 +875,64 @@ body {
   text-align: center;
 }
 
+/* Dataset Scale Selector */
+.scale-selector {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding: 12px 20px;
+  background: var(--surface);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+
+.scale-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.scale-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.scale-btn {
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-secondary);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s var(--ease-smooth);
+}
+
+.scale-btn:hover:not(.disabled) {
+  background: var(--surface-hover);
+  border-color: var(--border-light);
+}
+
+.scale-btn.active {
+  background: var(--ch-muted);
+  border-color: var(--ch);
+  color: var(--ch);
+}
+
+.scale-btn.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.current-scale {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-family: 'JetBrains Mono', monospace;
+}
+
 .winner-summary {
   display: flex;
   justify-content: center;
@@ -1325,6 +1383,36 @@ body {
   border-color: var(--es-muted);
 }
 
+/* Why wins block */
+.info-block.why-wins {
+  background: linear-gradient(135deg, var(--ch-muted), var(--es-muted));
+  border-color: var(--ch);
+}
+
+.info-block.why-wins h4 {
+  color: var(--text);
+}
+
+.info-block.why-wins p {
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* ES Limitation block */
+.info-block.es-limitation {
+  background: rgba(255, 100, 100, 0.08);
+  border-color: rgba(255, 100, 100, 0.3);
+}
+
+.info-block.es-limitation h4 {
+  color: #ff6b6b;
+}
+
+.info-block.es-limitation .limitation-text {
+  color: rgba(255, 150, 150, 0.9);
+  font-style: italic;
+}
+
 /* Winner Badge */
 .winner-badge {
   background: var(--bg);
@@ -1336,6 +1424,77 @@ body {
 
 .winner-badge.es-winner {
   border-color: var(--es);
+}
+
+.winner-badge.es-not-possible {
+  border-color: rgba(255, 100, 100, 0.5);
+  background: rgba(255, 100, 100, 0.05);
+}
+
+.winner-badge.es-not-possible .winner-name {
+  color: var(--ch);
+}
+
+.winner-badge.es-not-possible .winner-speedup {
+  color: #ff6b6b;
+  font-size: 11px;
+}
+
+/* Single result display (for ES not possible) */
+.single-result-display {
+  background: var(--bg);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.timing-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+
+.timing-row.ch {
+  background: var(--ch-muted);
+  border-color: var(--ch);
+}
+
+.timing-row.es-not-possible {
+  background: rgba(255, 100, 100, 0.08);
+  border-color: rgba(255, 100, 100, 0.3);
+}
+
+.timing-label {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.timing-row.ch .timing-label {
+  color: var(--ch);
+}
+
+.timing-row.es-not-possible .timing-label {
+  color: rgba(255, 150, 150, 0.8);
+}
+
+.timing-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.timing-row.ch .timing-value {
+  color: var(--ch);
+}
+
+.timing-value.not-possible {
+  color: #ff6b6b;
+  font-size: 14px;
 }
 
 .winner-badge .winner-label {
@@ -1587,6 +1746,159 @@ body {
 }
 
 /* ============================================================
+   DETAILED CAPABILITIES PAGE - ES LIMITATIONS VISUAL
+   ============================================================ */
+
+.capabilities-page-detailed {
+  text-align: center;
+}
+
+.es-limitations-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  margin: 24px 0;
+}
+
+.limitation-card {
+  background: var(--surface);
+  border: 1px solid rgba(255, 100, 100, 0.2);
+  border-radius: 16px;
+  padding: 20px;
+  text-align: left;
+}
+
+.limitation-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.limitation-icon {
+  font-size: 1.5rem;
+}
+
+.limitation-header h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+.comparison-box {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ch-side, .es-side {
+  padding: 12px;
+  border-radius: 10px;
+}
+
+.ch-side {
+  background: var(--ch-muted);
+  border: 1px solid var(--ch);
+}
+
+.es-side {
+  background: rgba(255, 100, 100, 0.08);
+  border: 1px solid rgba(255, 100, 100, 0.3);
+}
+
+.ch-side .label, .es-side .label {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.ch-side .label {
+  color: var(--ch);
+}
+
+.es-side .label {
+  color: #ff6b6b;
+}
+
+.ch-side code {
+  display: block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.es-side .reason {
+  display: block;
+  font-size: 12px;
+  color: rgba(255, 150, 150, 0.9);
+  line-height: 1.5;
+  font-style: italic;
+}
+
+.capability-summary {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px;
+  margin: 24px auto;
+  max-width: 600px;
+}
+
+.summary-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 32px;
+}
+
+.summary-item {
+  text-align: center;
+}
+
+.summary-item.ch {
+  background: var(--ch-muted);
+  border: 1px solid var(--ch);
+  border-radius: 12px;
+  padding: 16px 24px;
+}
+
+.summary-item .count {
+  display: block;
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--ch);
+  line-height: 1;
+  margin-bottom: 8px;
+}
+
+.summary-item .desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.summary-item .highlight {
+  display: block;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #ff6b6b;
+  margin-bottom: 8px;
+}
+
+.summary-divider {
+  font-size: 2rem;
+  color: var(--text-dim);
+  font-weight: 300;
+}
+
+/* ============================================================
    RESPONSIVE DESIGN
    ============================================================ */
 
@@ -1630,6 +1942,22 @@ body {
 
   .capabilities-page .capabilities-grid {
     grid-template-columns: 1fr;
+  }
+
+  .es-limitations-grid {
+    grid-template-columns: 1fr;
+    max-width: 400px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .summary-row {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .summary-divider {
+    display: none;
   }
 }
 
