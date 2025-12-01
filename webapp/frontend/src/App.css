@@ -1613,6 +1613,31 @@ body {
 .category-card.fair { border-color: rgba(255, 255, 255, 0.15); }
 .category-card.ch { border-color: var(--ch-muted); }
 .category-card.es { border-color: var(--es-muted); }
+.category-card.query { border-color: var(--es-muted); }
+.category-card.capability { border-color: var(--ch-muted); }
+
+.categories-grid.two-col {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.category-expectation {
+  margin-top: 16px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.category-expectation.es {
+  background: rgba(127, 179, 191, 0.15);
+  color: var(--es);
+}
+
+.category-expectation.ch {
+  background: rgba(217, 168, 100, 0.15);
+  color: var(--ch);
+}
 
 .category-icon {
   font-size: 2rem;
@@ -1628,6 +1653,8 @@ body {
 .category-card.fair h3 { color: var(--text); }
 .category-card.ch h3 { color: var(--ch); }
 .category-card.es h3 { color: var(--es); }
+.category-card.query h3 { color: var(--es); }
+.category-card.capability h3 { color: var(--ch); }
 
 .category-card > p {
   font-size: 12px;
@@ -1986,5 +2013,67 @@ body {
   .winner-summary {
     flex-direction: column;
     gap: 12px;
+  }
+}
+
+/* ============================================================
+   INFRASTRUCTURE BENCHMARKS SLIDE
+   ============================================================ */
+
+.infra-speedup-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+  margin-top: 24px;
+  max-width: 900px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.infra-speedup-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px;
+  text-align: center;
+  transition: all 0.3s var(--ease-out);
+}
+
+.infra-speedup-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--ch);
+  box-shadow: 0 8px 32px rgba(196, 120, 90, 0.15);
+}
+
+.infra-speedup-card .speedup-value {
+  font-size: 3rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--ch) 0%, var(--ch-soft) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 8px;
+}
+
+.infra-speedup-card .speedup-label {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 12px;
+}
+
+.infra-speedup-card .speedup-detail {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+@media (max-width: 768px) {
+  .infra-speedup-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .infra-speedup-card .speedup-value {
+    font-size: 2.5rem;
   }
 }

@@ -48,7 +48,6 @@ function App() {
   const [storageData, setStorageData] = useState<any>(null);
   const [scalabilityData, setScalabilityData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [showSpeakerNotes, setShowSpeakerNotes] = useState(false);
   const [selectedScale, setSelectedScale] = useState<'1m' | '10m' | '100m'>('100m');
 
   const pages = [
@@ -58,31 +57,13 @@ function App() {
     'ingestion-performance',
     'storage-comparison',
     'benchmark-categories',
-    'performance-fair',
-    'performance-clickhouse',
-    'performance-elasticsearch',
-    'capabilities-comparison',
+    'performance-query',
+    'performance-capability',
     'interactive-terminal',
     'takeaways',
     'conclusions'
   ];
 
-  // Speaker notes for each slide
-  const speakerNotes: Record<string, string> = {
-    'intro': 'Introduce yourself. "Today I\'ll be presenting my comparative analysis of ClickHouse versus Elasticsearch..."',
-    'problem-statement': 'Explain the motivation. Both are popular for analytics but built on fundamentally different architectures.',
-    'datasets-overview': 'Describe the three healthcare datasets: 1M, 10M, and 100M rows.',
-    'ingestion-performance': 'Critical metric: ClickHouse loads data 20-23x faster. This matters for real-time pipelines.',
-    'storage-comparison': 'Highlight compression advantage across all scales. Storage costs money in cloud environments.',
-    'benchmark-categories': 'Explain our fair approach: 4 fair tests, 4 ClickHouse strengths, 4 Elasticsearch strengths.',
-    'performance-fair': 'These 4 benchmarks test equivalent operations. Shows how they compare on level ground.',
-    'performance-clickhouse': 'These showcase ClickHouse strengths: JOINs, subqueries, time-series, advanced SQL.',
-    'performance-elasticsearch': 'These showcase ES strengths: full-text search, prefix matching, caching, high-cardinality.',
-    'capabilities-comparison': 'Clear summary of what each system CAN and CANNOT do. Important for database selection.',
-    'interactive-terminal': 'Demo time! Try queries on different datasets.',
-    'takeaways': 'Query pattern matters. Choose based on your workload.',
-    'conclusions': 'No universal winner. ClickHouse for analytics, Elasticsearch for hybrid search-analytics.'
-  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -117,8 +98,6 @@ function App() {
         setCurrentPage(p => Math.min(p + 1, pages.length - 1));
       } else if (e.key === 'ArrowLeft') {
         setCurrentPage(p => Math.max(p - 1, 0));
-      } else if (e.key === 'n' || e.key === 'N') {
-        setShowSpeakerNotes(s => !s);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -145,7 +124,7 @@ function App() {
 
       // Search through all categories for the benchmark
       let benchmark = null;
-      for (const category of ['fair', 'clickhouse_strength', 'elasticsearch_strength']) {
+      for (const category of ['query', 'capability']) {
         if (data.benchmarks[category]) {
           const found = Object.values(data.benchmarks[category]).find(
             (b: any) => b.name === benchmarkName
@@ -160,7 +139,7 @@ function App() {
       if (!benchmark) return null;
 
       const esNotPossible = benchmark.es_not_possible || benchmark.elasticsearch?.not_possible;
-      
+
         return {
         name: benchmark.name.replace(' Aggregation', '').replace(' Performance', '').replace(' Query', '').replace(' Analysis', '').replace(' Features', ''),
         fullName: benchmark.name,
@@ -180,12 +159,12 @@ function App() {
 
   // Memoized function to get benchmark data by category
   const getBenchmarksByCategory = useMemo(() => {
-    return (data: any, category: 'fair' | 'clickhouse_strength' | 'elasticsearch_strength'): any[] => {
+    return (data: any, category: 'query' | 'capability'): any[] => {
       if (!data?.benchmarks?.[category]) return [];
 
       const results: any[] = [];
       const categoryData = data.benchmarks[category];
-      
+
       Object.keys(categoryData).forEach(key => {
         const benchmark = categoryData[key];
         if (benchmark?.clickhouse) {
@@ -368,7 +347,7 @@ function App() {
   };
 
   // Category-based benchmark slide
-  const renderCategorySlide = (category: 'fair' | 'clickhouse_strength' | 'elasticsearch_strength', title: string, subtitle: string) => {
+  const renderCategorySlide = (category: 'query' | 'capability', title: string, subtitle: string) => {
     // Get data based on selected scale
     const dataMap = {
       '1m': healthcare1mData,
@@ -421,9 +400,11 @@ function App() {
     }
 
     // Count wins excluding ES not possible cases (counted separately)
-    const chWins = chartData.filter((d: any) => d?.winner === 'ClickHouse' && !d?.esNotPossible).length;
-    const esWins = chartData.filter((d: any) => d?.winner === 'Elasticsearch').length;
+    // Count CH wins including ES not possible cases (CH wins by default when ES can't compete)
+    const chWinsRegular = chartData.filter((d: any) => d?.winner === 'ClickHouse' && !d?.esNotPossible).length;
     const esNotPossibleCount = chartData.filter((d: any) => d?.esNotPossible).length;
+    const chWins = chWinsRegular + esNotPossibleCount; // ES not possible = CH wins
+    const esWins = chartData.filter((d: any) => d?.winner === 'Elasticsearch').length;
 
     return (
       <motion.div className="page summary-page-new" variants={staggerContainer} initial="initial" animate="animate">
@@ -454,18 +435,12 @@ function App() {
         <motion.div className="winner-summary" variants={fadeInUp}>
           <div className={`winner-pill ch ${chWins > esWins ? 'leading' : ''}`}>
             <span className="winner-count">{chWins}</span>
-            <span className="winner-label">ClickHouse Wins</span>
+            <span className="winner-label">ClickHouse{esNotPossibleCount > 0 ? ` (${esNotPossibleCount} ES can't do)` : ''}</span>
           </div>
           <div className={`winner-pill es ${esWins > chWins ? 'leading' : ''}`}>
             <span className="winner-count">{esWins}</span>
-            <span className="winner-label">Elasticsearch Wins</span>
+            <span className="winner-label">Elasticsearch</span>
           </div>
-          {esNotPossibleCount > 0 && (
-            <div className="winner-pill not-possible">
-              <span className="winner-count">{esNotPossibleCount}</span>
-              <span className="winner-label">ES Can't Do</span>
-            </div>
-          )}
         </motion.div>
 
         <motion.div variants={fadeInUp} className="chart-wrapper interactive-chart">
@@ -535,14 +510,11 @@ function App() {
         </motion.div>
 
         <motion.div variants={fadeInUp} className="slide-insight">
-          {category === 'fair' && (
-            <p><strong>Fair comparison:</strong> Equivalent operations show actual performance differences</p>
+          {category === 'query' && (
+            <p><strong>Query Performance:</strong> ES doc_values provide pre-indexed columnar access for fast aggregations</p>
           )}
-          {category === 'clickhouse_strength' && (
-            <p><strong>ClickHouse advantage:</strong> Native SQL JOINs, subqueries, and columnar processing shine here</p>
-          )}
-          {category === 'elasticsearch_strength' && (
-            <p><strong>Elasticsearch advantage:</strong> Inverted indexes and filter caching excel in these scenarios</p>
+          {category === 'capability' && (
+            <p><strong>Capability Gap:</strong> These operations require SQL features ES fundamentally cannot support</p>
           )}
         </motion.div>
       </motion.div>
@@ -617,7 +589,7 @@ function App() {
               animate={{ opacity: 1 }}
               transition={{ delay: 1.2 }}
             >
-              <kbd>→</kbd> to continue • <kbd>N</kbd> for speaker notes
+              <kbd>→</kbd> to continue
             </motion.div>
           </motion.div>
         );
@@ -889,63 +861,52 @@ function App() {
             <motion.div className="slide-header" variants={fadeInUp}>
               <span className="slide-number">{currentPage + 1}</span>
               <h2>Our Benchmark Approach</h2>
-              <p className="page-subtitle">12 benchmarks organized into 3 fair categories</p>
+              <p className="page-subtitle">5 query + 3 capability + 2 infrastructure = 10 benchmarks</p>
             </motion.div>
 
-            <div className="categories-grid">
-              <motion.div className="category-card fair" variants={slideInLeft}>
-                <div className="category-icon">⚖️</div>
-                <h3>Fair Benchmarks</h3>
-                <p>4 tests with equivalent operations on both systems</p>
+            <div className="categories-grid two-col">
+              <motion.div className="category-card query" variants={slideInLeft}>
+                <div className="category-icon">📊</div>
+                <h3>Query Performance (5)</h3>
+                <p>Both systems can execute these - direct comparison</p>
                 <ul>
                   <li>Simple Aggregation</li>
-                  <li>Multi-Field GROUP BY</li>
-                  <li>Range Filter + Aggregation</li>
-                  <li>Cardinality Count</li>
-                </ul>
-              </motion.div>
-
-              <motion.div className="category-card ch" variants={fadeInUp}>
-                <div className="category-icon">🟡</div>
-                <h3>ClickHouse Strengths</h3>
-                <p>4 tests showcasing columnar & SQL advantages</p>
-                <ul>
-                  <li>Complex JOIN</li>
                   <li>Time-Series Analysis</li>
-                  <li>Subquery Filter</li>
-                  <li>Advanced SQL Features</li>
+                  <li>Full-Text Search</li>
+                  <li>Top-N Query</li>
+                  <li>Multi-Metric Dashboard</li>
                 </ul>
+                <div className="category-expectation es">ES wins most (doc_values)</div>
               </motion.div>
 
-              <motion.div className="category-card es" variants={slideInRight}>
-                <div className="category-icon">🔵</div>
-                <h3>Elasticsearch Strengths</h3>
-                <p>4 tests showcasing search & index advantages</p>
+              <motion.div className="category-card capability" variants={slideInRight}>
+                <div className="category-icon">🔧</div>
+                <h3>Capability + Infrastructure (5)</h3>
+                <p>ES limitations + infrastructure metrics</p>
                 <ul>
-                  <li>Full-Text Search</li>
-                  <li>Prefix Search</li>
-                  <li>Recent Data Filter</li>
-                  <li>High-Cardinality Terms</li>
+                  <li>Patient-Event JOIN ❌</li>
+                  <li>Cost by Condition JOIN ❌</li>
+                  <li>Anomaly Detection (Subquery) ❌</li>
+                  <li>Data Ingestion (20x faster)</li>
+                  <li>Storage Compression (9x better)</li>
                 </ul>
+                <div className="category-expectation ch">CH wins all 5</div>
               </motion.div>
             </div>
 
             <motion.div className="slide-insight" variants={fadeInUp}>
-              <p><strong>Transparent comparison:</strong> We test where each system should win, not just where one dominates</p>
+              <p><strong>Honest story:</strong> ES wins on pre-indexed queries, but CH enables analytics ES cannot do + massive infra advantages</p>
             </motion.div>
           </motion.div>
         );
 
-      case 'performance-fair':
-        return renderCategorySlide('fair', '⚖️ Fair Benchmarks', 'Equivalent operations - level playing field');
+      case 'performance-query':
+        return renderCategorySlide('query', '📊 Query Performance', 'Both systems compete - ES wins with doc_values');
 
-      case 'performance-clickhouse':
-        return renderCategorySlide('clickhouse_strength', '🟡 ClickHouse Strengths', 'JOINs, subqueries, time-series, advanced SQL');
+      case 'performance-capability':
+        return renderCategorySlide('capability', '🔧 Capability Comparison', 'Operations Elasticsearch cannot perform');
 
-      case 'performance-elasticsearch':
-        return renderCategorySlide('elasticsearch_strength', '🔵 Elasticsearch Strengths', 'Full-text search, prefix matching, caching');
-
-      case 'capabilities-comparison':
+      case 'capabilities-comparison-old':
         return (
           <motion.div className="page capabilities-page-detailed" variants={staggerContainer} initial="initial" animate="animate">
             <motion.div className="slide-header" variants={fadeInUp}>
@@ -1154,20 +1115,6 @@ function App() {
           />
         ))}
       </div>
-
-      <AnimatePresence>
-        {showSpeakerNotes && (
-          <motion.div
-            className="speaker-notes"
-            initial={{ x: 300, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: 300, opacity: 0 }}
-          >
-            <h4>Speaker Notes</h4>
-            <p>{speakerNotes[pages[currentPage]] || 'No notes for this slide.'}</p>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       <AnimatePresence mode="wait">
         <motion.div
