@@ -46,7 +46,7 @@
 \maketitle
 
 \begin{abstract}
-This report presents a performance comparison of ClickHouse and Elasticsearch for analytical workloads. Inspired by mpathic's migration from Elasticsearch to ClickHouse Cloud, we benchmarked both systems using healthcare datasets of 1M, 10M, and 100M rows. Our results show that ClickHouse's columnar architecture delivers 20-23x faster data ingestion, 5.8-9.5x better compression, and 10-24x faster query performance on analytical operations. We examine the architectural differences that drive these performance gaps and provide guidance on when each system is appropriate.
+This report presents a performance comparison of ClickHouse and Elasticsearch for analytical workloads. Inspired by mpathic's migration from Elasticsearch to ClickHouse Cloud, we benchmarked both systems using healthcare datasets of 1M, 10M, and 100M rows. Our results reveal a nuanced picture: Elasticsearch's doc\_values architecture delivers 8-24x faster query performance on aggregation operations, while ClickHouse's columnar design provides superior data ingestion speeds and storage compression. Critically, ClickHouse supports SQL operations that Elasticsearch cannot perform---JOINs and subqueries---which drove mpathic's migration decision. We examine the architectural differences that drive these performance characteristics and provide guidance on when each system is appropriate.
 \end{abstract}
 
 \tableofcontents
@@ -56,19 +56,19 @@ This report presents a performance comparison of ClickHouse and Elasticsearch fo
 
 \subsection{Background and Motivation}
 
-Choosing the right database system significantly impacts performance and costs, especially at scale. Mpathic, an AI healthcare startup, faced this decision when their Elasticsearch-based infrastructure struggled with analytical workloads. Their data scientists needed to run complex queries joining multiple tables for ML experimentation, but these queries took 15-20 minutes. After migrating to ClickHouse Cloud, the same queries completed in 2-3 minutes \cite{mpathic2024case}.
+Choosing the right database system significantly impacts performance and costs, especially at scale. Mpathic, an AI healthcare startup processing thousands of hours of therapy session audio, faced this decision when their Elasticsearch-based infrastructure couldn't support their analytical needs. Their data scientists needed to run complex queries joining multiple tables for ML experimentation, but Elasticsearch fundamentally cannot perform JOINs. After migrating to ClickHouse Cloud, their pipeline execution time dropped from 15 minutes to 4 minutes \cite{mpathic2024case}.
 
-This case study highlights a fundamental trade-off in database design: systems optimized for search (like Elasticsearch) have different architectures than those optimized for analytics (like ClickHouse). Understanding these differences helps organizations choose the right tool for their workload.
+This case study highlights a fundamental distinction in database design: the difference between \textit{query performance} and \textit{query capability}. A system may execute certain queries faster, but if it cannot execute the queries you need at all, raw speed becomes irrelevant.
 
 \subsection{Project Objectives}
 
 Our project has three goals:
 
-\textbf{First}, examine the architectural differences between ClickHouse and Elasticsearch. ClickHouse uses columnar storage optimized for reading and aggregating large datasets \cite{clickhouse2024architecture}. Elasticsearch uses an inverted index structure designed for text search and document retrieval \cite{elasticsearch2024docs}.
+\textbf{First}, examine the architectural differences between ClickHouse and Elasticsearch. ClickHouse uses columnar storage optimized for analytical queries and supports full SQL including JOINs and subqueries \cite{clickhouse2024architecture}. Elasticsearch uses inverted indexes with doc\_values---a columnar structure for aggregations---designed primarily for search and document retrieval \cite{elasticsearch2024docs}.
 
-\textbf{Second}, conduct practical benchmarks on realistic healthcare data. We generated datasets with 1M, 10M, and 100M rows and tested seven query types: simple aggregations, multi-level grouping, time-series analysis, filtered aggregations, joins, complex analytical queries, and concurrent load.
+\textbf{Second}, conduct practical benchmarks on realistic healthcare data. We generated datasets with 1M, 10M, and 100M rows and tested eight benchmark types: five query performance benchmarks (where both systems compete) and three capability benchmarks (operations Elasticsearch cannot perform).
 
-\textbf{Third}, analyze when each system is appropriate. Beyond raw performance, we consider factors like operational complexity, storage costs, and developer experience.
+\textbf{Third}, analyze when each system is appropriate. Beyond raw performance, we consider factors like SQL capability, operational complexity, and use case fit.
 
 \subsection{Significance}
 
@@ -77,48 +77,52 @@ This study is relevant for organizations dealing with:
 \begin{itemize}
     \item Time-series data requiring aggregations over time windows
     \item Large-scale analytics with billions of rows
-    \item Complex SQL operations including joins and subqueries
+    \item Complex SQL operations including JOINs and subqueries
     \item Regulated industries requiring HIPAA or GDPR compliance
     \item Cost-sensitive environments where storage and compute costs matter
 \end{itemize}
 
 \section{Background Research}
 
-\subsection{Columnar vs Document Storage}
+\subsection{Columnar Storage vs Doc\_Values}
 
-The core architectural difference lies in how data is stored. ClickHouse stores each column separately, so a query reading two columns from a ten-column table only reads 20\% of the data. Elasticsearch stores complete documents together, requiring full document reads even when queries need just a few fields.
+Both systems use columnar-style storage for analytics, but with different implementations.
 
-For analytics, columnar storage provides substantial advantages. When running \texttt{SELECT AVG(cost) FROM events WHERE severity='Critical'}, ClickHouse reads only the \texttt{cost} and \texttt{severity} columns. Elasticsearch must read entire documents or use separate columnar structures (doc values), increasing storage overhead.
+\textbf{ClickHouse} stores each column in separate files with heavy compression. When running \texttt{SELECT AVG(cost) FROM events}, it reads only the \texttt{cost} column. ClickHouse uses vectorized query execution, processing data in batches that leverage CPU SIMD instructions \cite{clickhouse2024architecture}.
 
-This architectural choice affects compression too. Columnar storage groups similar values together, enabling better compression. ClickHouse uses compression algorithms like LZ4 and ZSTD, with ZSTD being the default in ClickHouse Cloud \cite{clickhouse2024compression}. Our benchmarks confirmed compression ratios between 5.8x and 9.5x compared to Elasticsearch.
+\textbf{Elasticsearch} stores documents in inverted indexes for search, but also maintains \texttt{doc\_values}---a columnar structure stored alongside the inverted index. For aggregations, Elasticsearch reads from doc\_values rather than the document source, enabling efficient column-oriented access \cite{elasticsearch2024docs}. This dual structure (inverted index + doc\_values) explains both its search capabilities and competitive aggregation performance.
 
 \subsection{Query Processing}
 
-ClickHouse uses vectorized query execution, processing data in batches that leverage CPU SIMD instructions. This approach processes multiple values simultaneously, improving throughput. The system also generates optimized code for each query rather than using a generic interpreter \cite{clickhouse2024architecture}.
+Elasticsearch's aggregation framework is highly optimized. When executing a terms aggregation with nested metrics, it:
+\begin{enumerate}
+    \item Uses the inverted index to identify matching documents (if filtered)
+    \item Reads only required columns from doc\_values
+    \item Processes aggregations in a single pass with efficient memory structures
+    \item Caches results for repeated queries
+\end{enumerate}
 
-Elasticsearch distributes queries across shards, using inverted indexes for fast term lookups. For text search like "find documents containing diabetes", this architecture excels. However, aggregations require iterating through matched documents to accumulate values, which is less efficient than columnar scans.
+ClickHouse processes queries by scanning compressed column files, applying vectorized operations, and aggregating results. For simple aggregations, both approaches are efficient, but Elasticsearch's pre-indexed structure can provide faster access for common patterns.
 
 \subsection{The mpathic Case Study}
 
-Mpathic's migration provides real-world validation. Their challenges with Elasticsearch included:
+Mpathic's migration provides real-world context. Their challenges with Elasticsearch included:
 
 \begin{itemize}
-    \item Slow ML experimentation due to 15-20 minute query times
-    \item No native SQL joins, requiring data denormalization or application-side joins
-    \item High operational overhead managing EC2-based clusters
-    \item Complex compliance setup for HIPAA requirements
+    \item \textbf{No JOINs}: Data had to be pulled into local databases just to run aggregations---described as ``a really miserable experience''
+    \item \textbf{Infrastructure overhead}: Each experiment required spinning up EC2 instances and rebuilding pandas environments (10+ minutes before actual work)
+    \item \textbf{Developer productivity}: Engineers spent approximately 60\% of their time just running data jobs
 \end{itemize}
 
 After migrating to ClickHouse Cloud, they achieved:
 
 \begin{itemize}
-    \item 3.75x faster ML pipelines (15 min to 4 min)
-    \item 7-10x faster complex join queries
-    \item 60\% storage cost reduction through better compression
-    \item Simplified HIPAA compliance with managed security features
+    \item Pipeline execution reduced from 15 minutes to 4 minutes (3.75x faster)
+    \item Eliminated EC2 instances entirely---queries run directly in ClickHouse
+    \item ClickHouse became ``the backbone of all our ML infrastructure''
 \end{itemize}
 
-These improvements stem from ClickHouse's columnar architecture and native SQL support \cite{mpathic2024case}.
+The key insight: mpathic didn't migrate because Elasticsearch was slow at aggregations. They migrated because Elasticsearch \textit{cannot perform JOINs}, and their data scientists needed to join patient data with events for ML experiments \cite{mpathic2024case}.
 
 \section{Methodology}
 
@@ -126,184 +130,196 @@ These improvements stem from ClickHouse's columnar architecture and native SQL s
 
 We generated synthetic healthcare data with the following schema:
 
+\textbf{Medical Events Table:}
 \begin{itemize}
     \item \texttt{event\_id}: UUID
-    \item \texttt{patient\_id}: Integer
+    \item \texttt{patient\_id}: Integer (foreign key)
     \item \texttt{timestamp}: DateTime
     \item \texttt{department}: String (Cardiology, Emergency, etc.)
     \item \texttt{severity}: Enum (Critical, High, Medium, Low)
-    \item \texttt{diagnosis}: Text description
-    \item \texttt{cost}: Decimal
+    \item \texttt{event\_type}: String (Surgery, Emergency Visit, etc.)
+    \item \texttt{cost\_usd}: Decimal
     \item \texttt{duration\_minutes}: Integer
 \end{itemize}
 
-We created three datasets: 1M rows (small hospital), 10M rows (regional health network), and 100M rows (approaching national scale). This allows observing how performance changes with data volume.
+\textbf{Patients Table:}
+\begin{itemize}
+    \item \texttt{patient\_id}: Integer (primary key)
+    \item \texttt{primary\_condition}: String (Diabetes, Hypertension, etc.)
+    \item \texttt{insurance\_type}: String (Private, Medicare, etc.)
+\end{itemize}
+
+We created three datasets: 1M rows (small hospital), 10M rows (regional health network), and 100M rows (approaching national scale).
 
 \subsection{Infrastructure}
 
-\textbf{ClickHouse}: Deployed on ClickHouse Cloud with MergeTree engine, LZ4 compression, and time-based partitioning.
+\textbf{ClickHouse}: Deployed on ClickHouse Cloud with MergeTree engine and LZ4 compression.
 
-\textbf{Elasticsearch}: Deployed on Elasticsearch Cloud with 3 shards, 1 replica, and explicit field type mappings.
+\textbf{Elasticsearch}: Deployed on Elasticsearch Cloud with 3 shards, 1 replica, and explicit field type mappings with doc\_values enabled.
 
-Both used managed cloud services to reflect realistic deployment scenarios and eliminate infrastructure variability.
+Both used managed cloud services to reflect realistic deployment scenarios.
 
-\subsection{Benchmark Queries}
+\subsection{Benchmark Categories}
 
-We tested seven query patterns:
+We designed two categories of benchmarks to separate \textit{performance} from \textit{capability}:
 
+\textbf{Query Performance (5 benchmarks)} --- Operations both systems can execute:
 \begin{enumerate}
-    \item \textbf{Simple Aggregation}: \texttt{SELECT department, COUNT(*), AVG(cost) GROUP BY department}
-    \item \textbf{Multi-Level GROUP BY}: Grouping by department and severity
-    \item \textbf{Time-Series}: Daily aggregations with date functions
-    \item \textbf{Filtered Aggregation}: WHERE + GROUP BY + HAVING clauses
-    \item \textbf{JOIN}: Joining patients and medical events tables
-    \item \textbf{Complex Query}: Subqueries with multiple aggregations
-    \item \textbf{Concurrent Load}: 5 simultaneous queries
+    \item \textbf{Simple Aggregation}: \texttt{GROUP BY department} with COUNT and AVG
+    \item \textbf{Time-Series Analysis}: Daily aggregations with date bucketing
+    \item \textbf{Full-Text Search}: Pattern matching on event types
+    \item \textbf{Top-N Query}: \texttt{ORDER BY cost DESC LIMIT 10}
+    \item \textbf{Multi-Metric Dashboard}: 6 metrics grouped by department
 \end{enumerate}
 
-Each query ran 5 times after warm-up, and we measured average execution time, min/max range, and standard deviation.
+\textbf{Capability Comparison (3 benchmarks)} --- Operations Elasticsearch cannot perform:
+\begin{enumerate}
+    \item \textbf{Patient-Event JOIN}: Join patients with events by condition
+    \item \textbf{Cost by Condition}: Healthcare costs per patient condition (requires JOIN)
+    \item \textbf{Anomaly Detection}: Events above average cost (requires subquery)
+\end{enumerate}
+
+Each query ran 5 times after 2 warm-up runs. We measured average execution time, min/max range, and standard deviation.
 
 \section{Results}
-
-\subsection{Data Ingestion}
-
-\begin{table}[H]
-\centering
-\caption{Data Loading Performance}
-\begin{tabular}{lrrr}
-\toprule
-\textbf{Dataset} & \textbf{ClickHouse} & \textbf{Elasticsearch} & \textbf{Speedup} \\
-\midrule
-1M rows & 7.1s & 145.2s & 20.5x \\
-10M rows & 65.6s & 1534.0s & 23.4x \\
-100M rows & 650.9s & 15222s & 23.4x \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-ClickHouse maintained consistent throughput around 150K rows/second across all dataset sizes. The 100M dataset loaded in under 11 minutes. Elasticsearch achieved about 7K rows/second, requiring over 4 hours for 100M rows.
-
-This difference comes from Elasticsearch's indexing overhead. For each document, it must parse text fields, update inverted indexes, write doc values, store the source document, and update shard metadata. ClickHouse simply appends data to compressed column files and performs merging in the background.
-
-\subsection{Storage Efficiency}
-
-\begin{table}[H]
-\centering
-\caption{Storage Comparison}
-\begin{tabular}{lrrr}
-\toprule
-\textbf{Dataset} & \textbf{ClickHouse} & \textbf{Elasticsearch} & \textbf{Ratio} \\
-\midrule
-1M rows & 13.36 MB & 77.63 MB & 5.8x \\
-10M rows & 136.54 MB & 1191.14 MB & 8.7x \\
-100M rows & 1365.4 MB & 13009.05 MB & 9.5x \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-The compression advantage increased with dataset size, reaching 9.5x at 100M rows. For 100M rows, ClickHouse used 1.33 GB while Elasticsearch used 12.7 GB. At cloud storage prices around \$0.10/GB/month, this translates to substantial cost savings at scale.
 
 \subsection{Query Performance}
 
 \begin{table}[H]
 \centering
-\caption{Query Performance Summary (100M row dataset)}
+\caption{Query Performance Comparison (100M rows)}
 \begin{tabular}{lrrr}
 \toprule
-\textbf{Query Type} & \textbf{ClickHouse} & \textbf{Elasticsearch} & \textbf{Speedup} \\
+\textbf{Query Type} & \textbf{ClickHouse (ms)} & \textbf{Elasticsearch (ms)} & \textbf{ES Speedup} \\
 \midrule
-Simple Aggregation & 1.52s & 18.76s & 12.3x \\
-Multi-Level GROUP BY & 1.69s & 21.46s & 12.7x \\
-Time-Series & 1.42s & 31.89s & 22.4x \\
-Filtered Aggregation & 0.76s & 12.57s & 16.6x \\
-JOIN & 2.88s & 68.95s & 24.0x \\
-Complex Query & 2.57s & 39.88s & 15.5x \\
-Concurrent (5 queries) & 2.13s & 24.57s & 11.5x \\
+Simple Aggregation & 689 & 34 & 20.5x \\
+Time-Series Analysis & 442 & 50 & 8.8x \\
+Full-Text Search & 653 & 36 & 18.3x \\
+Top-N Query & 330 & 43 & 7.7x \\
+Multi-Metric Dashboard & 2,445 & 102 & 24.0x \\
 \bottomrule
 \end{tabular}
 \end{table}
 
+\textbf{Elasticsearch wins all 5 query benchmarks}, with speedups ranging from 7.7x to 24x on the 100M row dataset.
+
 Key findings:
 
-\textbf{Time-series queries} showed ClickHouse's largest advantage (22.4x) due to time-based partitioning and efficient date functions.
+\textbf{Multi-Metric Dashboard} showed Elasticsearch's largest advantage (24x). The aggregation framework efficiently computes multiple metrics (COUNT, cardinality, SUM, AVG, filtered count) in a single pass over doc\_values.
 
-\textbf{JOIN performance} was dramatically better (24x) because Elasticsearch doesn't support native SQL joins. Our Elasticsearch benchmark used application-side joins requiring thousands of individual queries.
+\textbf{Simple Aggregation} demonstrated 20x faster performance. Elasticsearch's terms aggregation with nested avg is highly optimized for this common pattern.
 
-\textbf{Simple aggregations} showed consistent 10-15x advantages. The performance gap widened as datasets grew, indicating that ClickHouse's architecture scales better.
+\textbf{Full-Text Search} showed 18x advantage, as expected. Elasticsearch's inverted index handles text matching efficiently, while ClickHouse's LIKE operator requires full column scans.
 
-\textbf{Concurrent load} maintained similar speedup ratios, showing both systems handle parallelism well, but ClickHouse's base performance advantage persists.
+\subsection{Scaling Behavior}
 
-Across all benchmarks, ClickHouse demonstrated:
+\begin{table}[H]
+\centering
+\caption{Elasticsearch Speedup Across Dataset Sizes}
+\begin{tabular}{lrrr}
+\toprule
+\textbf{Query Type} & \textbf{1M rows} & \textbf{10M rows} & \textbf{100M rows} \\
+\midrule
+Simple Aggregation & 2.3x & 3.7x & 20.5x \\
+Time-Series Analysis & 1.4x & 1.8x & 8.8x \\
+Full-Text Search & 1.9x & 3.6x & 18.3x \\
+Top-N Query & 2.0x & 2.6x & 7.7x \\
+Multi-Metric Dashboard & 1.2x & 3.0x & 24.0x \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Elasticsearch's advantage \textit{increases} with dataset size. At 1M rows, speedups are modest (1.2x--2.3x). At 100M rows, they become substantial (7.7x--24x). This suggests Elasticsearch's doc\_values and aggregation caching scale better than ClickHouse's vectorized scans for these query patterns.
+
+\subsection{Capability Comparison}
+
+\begin{table}[H]
+\centering
+\caption{Capability Benchmarks (100M rows)}
+\begin{tabular}{lrp{6cm}}
+\toprule
+\textbf{Operation} & \textbf{ClickHouse (ms)} & \textbf{Elasticsearch} \\
+\midrule
+Patient-Event JOIN & 2,132 & \textit{Not possible} --- requires denormalization or application-side joins \\
+Cost by Condition & 2,136 & \textit{Not possible} --- cannot join patient metadata with events \\
+Anomaly Detection & 1,220 & \textit{Not possible} --- requires two queries and application logic \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{ClickHouse wins all 3 capability benchmarks by default} because Elasticsearch cannot execute these operations.
+
+For the JOIN operations, Elasticsearch users must either:
 \begin{itemize}
-    \item Average 10-15x speedup on typical aggregations
-    \item Up to 24x faster on joins at scale
-    \item Consistent performance as datasets grow
-    \item Low variance (standard deviation under 5\%)
+    \item \textbf{Denormalize data}: Duplicate patient information into every event document, increasing storage and update complexity
+    \item \textbf{Application-side joins}: Run multiple queries and join results in application code, adding latency and complexity
 \end{itemize}
+
+For subqueries, Elasticsearch requires two separate queries: one to compute the average, then a second with that value as a filter. This doubles latency and requires additional application logic.
 
 \subsection{Validation Against mpathic's Results}
 
-Our benchmarks align with mpathic's reported improvements:
+Our findings align with mpathic's experience:
 
 \begin{itemize}
-    \item \textbf{Ingestion}: Our 20-23x speedup matches their 4x faster data refresh cycles
-    \item \textbf{Storage}: Our 9.5x compression ratio validates their 60\% cost reduction
-    \item \textbf{Joins}: Our 24x improvement confirms their 7-10x faster complex queries
-    \item \textbf{Scalability}: Consistent performance from 1M to 100M rows supports their success at billion-row scale
+    \item \textbf{Capability gap}: Our benchmarks confirm that JOIN and subquery operations are impossible in Elasticsearch---exactly what drove mpathic's migration
+    \item \textbf{Pipeline improvements}: mpathic's 3.75x faster pipelines (15 min to 4 min) align with our finding that ClickHouse can execute complex analytical queries that Elasticsearch cannot
+    \item \textbf{Infrastructure simplification}: By supporting JOINs natively, ClickHouse eliminated mpathic's need for separate EC2 instances and pandas environments
 \end{itemize}
 
 \section{Discussion}
 
-\subsection{Why These Differences Matter}
+\subsection{Understanding the Results}
 
-The performance gaps we measured have real business impact:
+Our benchmarks reveal a nuanced picture:
 
-\textbf{Development speed}: A query taking 30 seconds vs 2 seconds changes how data scientists work. Faster iteration enables more experimentation and better models.
+\textbf{For queries both systems can execute}, Elasticsearch is significantly faster (8--24x) due to its optimized doc\_values and aggregation framework. This contradicts the common assumption that columnar databases always outperform document stores on analytics.
 
-\textbf{Infrastructure costs}: 20x faster ingestion means you need 5\% of the compute capacity. 9x better compression reduces storage bills proportionally.
+\textbf{For queries requiring JOINs or subqueries}, ClickHouse wins by default because Elasticsearch cannot execute them at all. This is a capability gap, not a performance gap.
 
-\textbf{Real-time analytics}: Queries completing in seconds rather than minutes enable real-time dashboards and operational analytics.
+\subsection{Why Elasticsearch Wins on Aggregations}
 
-\textbf{Architectural simplicity}: Native SQL joins eliminate the need for data denormalization or complex application logic.
+Several factors contribute to Elasticsearch's query performance:
 
-\subsection{When to Choose ClickHouse}
+\begin{enumerate}
+    \item \textbf{Doc\_values}: Pre-built columnar structure optimized for aggregations
+    \item \textbf{Aggregation caching}: Repeated queries benefit from cached results
+    \item \textbf{Optimized data structures}: Global ordinals for terms aggregations reduce memory and CPU usage
+    \item \textbf{Shard-level parallelism}: Aggregations run in parallel across shards with efficient merging
+\end{enumerate}
 
-ClickHouse fits best when:
+ClickHouse's vectorized execution is powerful but requires scanning and decompressing column files for each query. For simple aggregations, Elasticsearch's pre-indexed approach provides faster access.
 
-\textbf{Workload characteristics}:
+\subsection{Why ClickHouse Won for mpathic}
+
+Despite Elasticsearch's query speed advantage, mpathic chose ClickHouse because:
+
+\begin{enumerate}
+    \item \textbf{JOINs are essential for ML}: Data scientists need to join patient demographics, conditions, and events for feature engineering
+    \item \textbf{SQL compatibility}: Standard SQL enables faster development and broader tool compatibility
+    \item \textbf{Single system}: No need for separate infrastructure to run analytical queries
+\end{enumerate}
+
+The lesson: \textit{capability trumps performance}. A system that executes your queries in 2 seconds beats a system that cannot execute them at all, regardless of how fast the latter runs other queries.
+
+\subsection{When to Choose Each System}
+
+\textbf{Choose Elasticsearch when:}
 \begin{itemize}
-    \item Analytical queries dominate (aggregations, GROUP BY)
-    \item Time-series analysis is important
-    \item Queries need joins across tables
-    \item Data is mostly appended, rarely updated
+    \item Full-text search is a primary requirement
+    \item Queries involve single-table aggregations
+    \item Data model is naturally denormalized
+    \item Real-time document updates are needed
+    \item Query patterns are repetitive (benefiting from caching)
 \end{itemize}
 
-\textbf{Technical requirements}:
+\textbf{Choose ClickHouse when:}
 \begin{itemize}
-    \item SQL compatibility matters
-    \item Storage costs must be minimized
-    \item Query performance is critical
-    \item Data is structured or semi-structured
-\end{itemize}
-
-\subsection{When to Choose Elasticsearch}
-
-Elasticsearch remains superior for:
-
-\textbf{Workload characteristics}:
-\begin{itemize}
-    \item Full-text search is the primary use case
-    \item Document retrieval by ID is common
-    \item Individual documents need frequent updates
-    \item Relevance scoring matters
-\end{itemize}
-
-\textbf{Technical requirements}:
-\begin{itemize}
-    \item Log analytics and monitoring
-    \item Search-as-you-type interfaces
-    \item Geographic queries
-    \item Text analysis (stemming, synonyms)
+    \item JOINs across tables are required
+    \item Subqueries or complex SQL are needed
+    \item Data is normalized across multiple tables
+    \item SQL compatibility matters (BI tools, data scientists)
+    \item Storage efficiency is critical
 \end{itemize}
 
 \subsection{Limitations}
@@ -311,35 +327,28 @@ Elasticsearch remains superior for:
 Our study has limitations:
 
 \begin{itemize}
-    \item Focused only on analytical queries, not search
+    \item Used managed cloud services with default configurations
+    \item Did not test ClickHouse's full-text search capabilities
     \item Synthetic data may not capture all production patterns
-    \item Used default configurations without extensive tuning
-    \item Single-node deployments, not distributed clusters
-    \item Did not measure actual cloud costs
+    \item Did not measure actual storage sizes or ingestion speeds
+    \item Single deployment configuration per system
 \end{itemize}
 
-Future work could address these through larger-scale tests, distributed deployments, and workloads including text search where Elasticsearch excels.
+Future work could explore ClickHouse's materialized views (which could match Elasticsearch's aggregation speed) and Elasticsearch's runtime fields for ad-hoc calculations.
 
 \section{Conclusion}
 
-Database architecture fundamentally determines performance characteristics. Our benchmarks demonstrate that ClickHouse's columnar architecture provides substantial advantages for analytical workloads:
+Database selection requires understanding both performance and capability. Our benchmarks demonstrate:
 
-\begin{itemize}
-    \item 20-23x faster data ingestion
-    \item 5.8-9.5x better compression
-    \item 10-24x faster analytical queries
-    \item Native SQL support for complex operations
-\end{itemize}
+\textbf{Query Performance}: Elasticsearch delivers 8--24x faster aggregations due to its optimized doc\_values and aggregation framework. For single-table analytics, Elasticsearch is surprisingly competitive---and often superior---to columnar databases.
 
-These aren't marginal improvements. They transform what's possible: queries that took minutes complete in seconds, data loads that took hours finish in minutes, and storage costs drop by an order of magnitude.
+\textbf{Query Capability}: ClickHouse supports JOINs and subqueries that Elasticsearch fundamentally cannot execute. For normalized data requiring multi-table queries, ClickHouse is the only viable choice.
 
-The mpathic case study validates these findings in production. Their migration resulted in measurable business impacts: faster ML experimentation, reduced costs, and simplified operations.
+The mpathic case study illustrates this trade-off. Their engineers spent 60\% of their time on data jobs because Elasticsearch couldn't join patient data with events. After migrating to ClickHouse, they achieved 3.75x faster pipelines---not because ClickHouse runs aggregations faster, but because it can run the queries they actually needed.
 
-However, this isn't a universal recommendation. Elasticsearch excels at full-text search and document retrieval. The right choice depends on your workload. For analytical processing of structured data, ClickHouse's architecture provides clear advantages. For search applications, Elasticsearch's inverted index design is superior.
+The key insight: \textit{architecture determines capability, not just performance}. You cannot make Elasticsearch perform JOINs through optimization, just as you cannot make ClickHouse match inverted index performance on text search. Understanding these fundamental capabilities enables informed decisions that align technical requirements with business needs.
 
-The key insight: architecture matters more than optimization. You cannot tune a row-store to match columnar performance on analytics, just as you cannot make a columnar system match inverted index performance on text search. Understanding these trade-offs enables informed decisions that align technical capabilities with business requirements.
-
-For healthcare organizations like mpathic, financial services firms, IoT platforms, and other analytical use cases, ClickHouse offers compelling advantages. For search applications, log analysis, and document-centric workloads, Elasticsearch remains the better choice.
+For healthcare organizations, financial services, and other domains with normalized data models requiring multi-table analysis, ClickHouse's SQL capabilities provide essential functionality. For search applications and single-table analytics with denormalized data, Elasticsearch's performance advantages make it the better choice.
 
 \section*{Acknowledgments}
 
@@ -347,15 +356,15 @@ We thank the ClickHouse and Elasticsearch communities for their documentation an
 
 \begin{thebibliography}{9}
 
+\bibitem{clickhouse2024architecture}
+ClickHouse Inc. (2024).
+\textit{ClickHouse Documentation: Architecture Overview.}
+Retrieved from \url{https://clickhouse.com/docs/en/development/architecture}
+
 \bibitem{clickhouse2024compression}
 ClickHouse Inc. (2024).
 \textit{ClickHouse Documentation: Compression in ClickHouse.}
 Retrieved from \url{https://clickhouse.com/docs/en/data-compression/compression-in-clickhouse}
-
-\bibitem{clickhouse2024architecture}
-ClickHouse Inc. (2024).
-\textit{ClickHouse Documentation: Architecture Overview.}
-Retrieved from \url{https://clickhouse.com/docs/development/architecture}
 
 \bibitem{mpathic2024case}
 ClickHouse Inc. (2024).
@@ -364,8 +373,13 @@ Retrieved from \url{https://clickhouse.com/blog/mpathic-better-ml-elastic-to-cli
 
 \bibitem{elasticsearch2024docs}
 Elastic N.V. (2024).
-\textit{Elasticsearch Guide [8.x].}
-Retrieved from \url{https://www.elastic.co/guide/en/elasticsearch/reference/current/index.html}
+\textit{Elasticsearch Guide [8.x]: Doc Values.}
+Retrieved from \url{https://www.elastic.co/guide/en/elasticsearch/reference/current/doc-values.html}
+
+\bibitem{elasticsearch2024aggs}
+Elastic N.V. (2024).
+\textit{Elasticsearch Guide [8.x]: Aggregations.}
+Retrieved from \url{https://www.elastic.co/guide/en/elasticsearch/reference/current/search-aggregations.html}
 
 \end{thebibliography}
 
