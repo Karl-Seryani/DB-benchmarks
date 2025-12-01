@@ -16,8 +16,14 @@ ENV/
 
 # Data files (large)
 datasets/
-*.json
-results/benchmark_results.json
+results/
+
+# Claude settings
+.claude/
+
+# Node
+node_modules/
+package-lock.json
 
 # IDE
 .vscode/
