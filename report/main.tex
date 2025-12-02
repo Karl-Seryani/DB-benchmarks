@@ -302,15 +302,40 @@ Despite Elasticsearch's query speed advantage, mpathic chose ClickHouse because:
 
 The lesson: \textit{capability trumps performance}. A system that executes your queries in 2 seconds beats a system that cannot execute them at all, regardless of how fast the latter runs other queries.
 
+\subsection{Elasticsearch's Unique Strengths}
+
+While ClickHouse can technically perform most operations, Elasticsearch has practical advantages that ClickHouse cannot easily replicate:
+
+\textbf{Advanced Full-Text Search Features:}
+\begin{itemize}
+    \item \textbf{Fuzzy matching}: ``hsopital'' automatically matches ``hospital''
+    \item \textbf{Synonyms}: ``heart attack'' matches ``myocardial infarction''
+    \item \textbf{Stemming}: ``running'' matches ``run'', ``ran'', ``runs''
+    \item \textbf{Relevance scoring (BM25)}: Results ranked by match quality
+    \item \textbf{Highlighting}: Shows which parts of text matched the query
+\end{itemize}
+
+ClickHouse has basic full-text indexes, but lacks the linguistic sophistication of Lucene-based search.
+
+\textbf{Real-Time Document Updates:}
+Elasticsearch can update individual documents instantly. ClickHouse is optimized for batch inserts; single-row updates require expensive mutations that rewrite entire data parts.
+
+\textbf{Nested/Hierarchical Documents:}
+Elasticsearch natively handles JSON arrays and nested objects with dedicated query syntax. ClickHouse requires flattening data or using Array columns with more complex query patterns.
+
+\textbf{Ecosystem Integration:}
+Kibana provides powerful visualization out of the box. Elasticsearch includes built-in anomaly detection and index lifecycle management. ClickHouse requires external tools for equivalent functionality.
+
 \subsection{When to Choose Each System}
 
 \textbf{Choose Elasticsearch when:}
 \begin{itemize}
-    \item Full-text search is a primary requirement
-    \item Queries involve single-table aggregations
-    \item Data model is naturally denormalized
-    \item Real-time document updates are needed
+    \item Full-text search with fuzzy matching, synonyms, or relevance scoring is needed
+    \item Queries involve single-table aggregations on denormalized data
+    \item Real-time document updates are required (not batch inserts)
+    \item Data is naturally hierarchical with nested JSON structures
     \item Query patterns are repetitive (benefiting from caching)
+    \item Kibana dashboards or built-in ML features are valuable
 \end{itemize}
 
 \textbf{Choose ClickHouse when:}
@@ -319,7 +344,8 @@ The lesson: \textit{capability trumps performance}. A system that executes your 
     \item Subqueries or complex SQL are needed
     \item Data is normalized across multiple tables
     \item SQL compatibility matters (BI tools, data scientists)
-    \item Storage efficiency is critical
+    \item Storage efficiency and compression are critical
+    \item High-volume batch ingestion is the primary write pattern
 \end{itemize}
 
 \subsection{Limitations}
