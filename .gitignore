@@ -18,9 +18,6 @@ ENV/
 datasets/
 results/
 
-# Claude settings
-.claude/
-
 # Node
 node_modules/
 package-lock.json

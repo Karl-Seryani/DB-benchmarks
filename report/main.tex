@@ -49,8 +49,6 @@
 This report presents a performance comparison of ClickHouse and Elasticsearch for analytical workloads. Inspired by mpathic's migration from Elasticsearch to ClickHouse Cloud, we benchmarked both systems using healthcare datasets of 1M, 10M, and 100M rows. Our results reveal a nuanced picture: Elasticsearch's doc\_values architecture delivers 8-24x faster query performance on aggregation operations, while ClickHouse's columnar design provides superior data ingestion speeds and storage compression. Critically, ClickHouse supports SQL operations that Elasticsearch cannot perform---JOINs and subqueries---which drove mpathic's migration decision. We examine the architectural differences that drive these performance characteristics and provide guidance on when each system is appropriate.
 \end{abstract}
 
-\tableofcontents
-\newpage
 
 \section{Introduction}
 

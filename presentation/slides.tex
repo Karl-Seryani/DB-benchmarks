@@ -1,0 +1,345 @@
+\documentclass[aspectratio=169]{beamer}
+\usetheme{default}
+\usecolortheme{default}
+
+% Dark theme colors
+\definecolor{bgdark}{HTML}{0a0a0f}
+\definecolor{chyellow}{HTML}{facc15}
+\definecolor{esteal}{HTML}{00bfa5}
+\definecolor{textgray}{HTML}{888888}
+\definecolor{textlight}{HTML}{cccccc}
+
+\setbeamercolor{background canvas}{bg=bgdark}
+\setbeamercolor{normal text}{fg=white}
+\setbeamercolor{frametitle}{fg=chyellow}
+\setbeamercolor{itemize item}{fg=chyellow}
+\setbeamercolor{itemize subitem}{fg=esteal}
+
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}[frame number]
+\setbeamerfont{footline}{size=\tiny}
+\setbeamercolor{footline}{fg=textgray}
+
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tikz}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+
+\title{\textcolor{chyellow}{ClickHouse} \textcolor{textgray}{vs} \textcolor{esteal}{Elasticsearch}}
+\subtitle{Performance Benchmark Analysis}
+\author{Karl Seryani \and Arik Dhaliwal \and Raghav Gulati}
+\institute{Database Systems $\cdot$ Fall 2025\\Western University}
+\date{}
+
+\begin{document}
+
+% Slide 1: Title
+\begin{frame}
+\titlepage
+\end{frame}
+
+% Slide 2: The Question
+\begin{frame}
+\frametitle{The Question}
+\framesubtitle{When should you use ClickHouse vs Elasticsearch?}
+
+\begin{columns}[T]
+\begin{column}{0.45\textwidth}
+\centering
+\textcolor{chyellow}{\Large $\lightning$ ClickHouse}\\[5pt]
+\textcolor{textgray}{Columnar OLAP}\\[10pt]
+\begin{itemize}
+\item Optimized for analytics
+\item Aggressive compression
+\item Native SQL support
+\item Fast full-table scans
+\end{itemize}
+\end{column}
+
+\begin{column}{0.08\textwidth}
+\centering
+\vspace{2cm}
+\textcolor{textgray}{\Large VS}
+\end{column}
+
+\begin{column}{0.45\textwidth}
+\centering
+\textcolor{esteal}{\Large $\mathcal{Q}$ Elasticsearch}\\[5pt]
+\textcolor{textgray}{Document Search}\\[10pt]
+\begin{itemize}
+\item Built on Lucene
+\item Inverted indexes
+\item Fast filtered queries
+\item Full-text search
+\end{itemize}
+\end{column}
+\end{columns}
+
+\vspace{15pt}
+\centering
+\textcolor{textlight}{Both popular for analytics, but \textbf{fundamentally different architectures}}
+\end{frame}
+
+% Slide 3: Test Datasets
+\begin{frame}
+\frametitle{Test Datasets}
+\framesubtitle{Three scales of healthcare data}
+
+\begin{columns}[c]
+\begin{column}{0.3\textwidth}
+\centering
+\textcolor{chyellow}{\Huge 1M}\\[10pt]
+\textcolor{white}{\large Healthcare}\\[5pt]
+\textcolor{textgray}{Small hospital\\200K patients\\500K events}
+\end{column}
+
+\begin{column}{0.3\textwidth}
+\centering
+\textcolor{chyellow}{\Huge 10M}\\[10pt]
+\textcolor{white}{\large Healthcare}\\[5pt]
+\textcolor{textgray}{Regional network\\2M patients\\5M events}
+\end{column}
+
+\begin{column}{0.3\textwidth}
+\centering
+\textcolor{chyellow}{\Huge 100M}\\[10pt]
+\textcolor{white}{\large Healthcare}\\[5pt]
+\textcolor{textgray}{Enterprise scale\\10M patients\\60M events}
+\end{column}
+\end{columns}
+
+\vspace{20pt}
+\centering
+\textcolor{textlight}{Multi-table structure allows testing JOINs---impossible in Elasticsearch}
+\end{frame}
+
+% Slide 4: Data Ingestion Performance
+\begin{frame}
+\frametitle{Data Ingestion Performance}
+\framesubtitle{ClickHouse: 20-23x faster ingestion across all scales}
+
+\begin{center}
+\begin{tabular}{lrrr}
+\toprule
+\textcolor{white}{\textbf{Dataset}} & \textcolor{chyellow}{\textbf{ClickHouse}} & \textcolor{esteal}{\textbf{Elasticsearch}} & \textcolor{white}{\textbf{Speedup}} \\
+\midrule
+1M rows & 7.1 sec & 145 sec & \textbf{20.5x} \\
+10M rows & 66 sec & 25.6 min & \textbf{23.4x} \\
+100M rows & 10.8 min & 4.2 hours & \textbf{23.4x} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{10pt}
+\begin{columns}[c]
+\begin{column}{0.45\textwidth}
+\centering
+\textcolor{chyellow}{\large $\sim$153K rows/sec}\\
+\textcolor{textgray}{Consistent throughput}
+\end{column}
+\begin{column}{0.45\textwidth}
+\centering
+\textcolor{esteal}{\large $\sim$6.5K rows/sec}\\
+\textcolor{textgray}{Index overhead}
+\end{column}
+\end{columns}
+
+\vspace{15pt}
+\textcolor{textlight}{\textbf{Key insight:} ClickHouse appends to columnar files; ES must update inverted indexes}
+\end{frame}
+
+% Slide 5: Storage Efficiency
+\begin{frame}
+\frametitle{Storage Efficiency}
+\framesubtitle{ClickHouse compression advantage increases with scale}
+
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+\textcolor{white}{\textbf{Dataset}} & \textcolor{chyellow}{\textbf{ClickHouse}} & \textcolor{esteal}{\textbf{Elasticsearch}} & \textcolor{white}{\textbf{Ratio}} \\
+\midrule
+1M rows & 13.4 MB & 77.6 MB & 5.8x \\
+10M rows & 137 MB & 1.19 GB & 8.7x \\
+100M rows & 1.37 GB & 13.0 GB & 9.5x \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{15pt}
+\textcolor{textlight}{\textbf{Compression improves with scale:} Columnar format stores similar values together}\\[10pt]
+\textcolor{textgray}{At cloud prices (\$0.023/GB/month), 9.5x compression = significant cost savings}
+\end{frame}
+
+% Slide 6: Benchmark Approach
+\begin{frame}
+\frametitle{Our Benchmark Approach}
+\framesubtitle{5 query + 3 capability = 8 benchmarks}
+
+\begin{columns}[T]
+\begin{column}{0.48\textwidth}
+\textcolor{esteal}{\large $\triangleright$ Query Performance (5)}\\[5pt]
+\textcolor{textgray}{Both systems compete}\\[10pt]
+\begin{itemize}
+\item Simple Aggregation
+\item Time-Series Analysis
+\item Full-Text Search
+\item Top-N Query
+\item Multi-Metric Dashboard
+\end{itemize}
+\vspace{5pt}
+\textcolor{esteal}{ES wins most (doc\_values)}
+\end{column}
+
+\begin{column}{0.48\textwidth}
+\textcolor{chyellow}{\large $\triangleright$ Capability (3)}\\[5pt]
+\textcolor{textgray}{ES cannot perform}\\[10pt]
+\begin{itemize}
+\item Patient-Event JOIN \textcolor{red}{$\times$}
+\item Cost by Condition \textcolor{red}{$\times$}
+\item Anomaly Detection \textcolor{red}{$\times$}
+\end{itemize}
+\vspace{5pt}
+\textcolor{chyellow}{CH wins all 3 by default}
+\end{column}
+\end{columns}
+
+\vspace{10pt}
+\centering
+\textcolor{textlight}{Each query: 5 runs after 2 warm-ups}
+\end{frame}
+
+% Slide 7: Query Performance Results
+\begin{frame}
+\frametitle{Query Performance (100M rows)}
+\framesubtitle{Elasticsearch wins all 5 benchmarks: 7.7x--24x faster}
+
+\begin{center}
+\begin{tabular}{lrrr}
+\toprule
+\textcolor{white}{\textbf{Query Type}} & \textcolor{chyellow}{\textbf{CH (ms)}} & \textcolor{esteal}{\textbf{ES (ms)}} & \textcolor{white}{\textbf{ES Speedup}} \\
+\midrule
+Simple Aggregation & 689 & 34 & \textbf{20.5x} \\
+Time-Series Analysis & 442 & 50 & \textbf{8.8x} \\
+Full-Text Search & 653 & 36 & \textbf{18.3x} \\
+Top-N Query & 330 & 43 & \textbf{7.7x} \\
+Multi-Metric Dashboard & 2,445 & 102 & \textbf{24.0x} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{10pt}
+\textcolor{textlight}{\textbf{Why ES wins:} doc\_values provide pre-indexed columnar access + aggregation caching}
+\end{frame}
+
+% Slide 8: Capability Comparison
+\begin{frame}
+\frametitle{Capability Comparison (100M rows)}
+\framesubtitle{Operations Elasticsearch cannot perform}
+
+\begin{center}
+\begin{tabular}{lrl}
+\toprule
+\textcolor{white}{\textbf{Operation}} & \textcolor{chyellow}{\textbf{ClickHouse}} & \textcolor{esteal}{\textbf{Elasticsearch}} \\
+\midrule
+Patient-Event JOIN & 2,132 ms & \textcolor{red}{\textit{Not possible}} \\
+Cost by Condition & 2,136 ms & \textcolor{red}{\textit{Not possible}} \\
+Anomaly Detection & 1,220 ms & \textcolor{red}{\textit{Not possible}} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{15pt}
+\textcolor{textlight}{\textbf{ES workarounds:}}
+\begin{itemize}
+\item Denormalize data (duplicate storage, complex updates)
+\item Application-side joins (multiple queries, added latency)
+\item Two queries for subqueries (doubled latency)
+\end{itemize}
+\end{frame}
+
+% Slide 9: Interactive Terminal (placeholder)
+\begin{frame}
+\frametitle{Interactive Terminal}
+\framesubtitle{Live Demo}
+
+\begin{center}
+\vspace{1cm}
+{\Large Run queries against both databases in real-time}\\[30pt]
+
+\textcolor{chyellow}{\texttt{SELECT department, COUNT(*), AVG(cost\_usd)}}\\
+\textcolor{chyellow}{\texttt{FROM medical\_events GROUP BY department}}\\[20pt]
+
+\textcolor{esteal}{\texttt{\{"aggs": \{"by\_dept": \{"terms": \{"field": "department"\}\}\}\}}}\\[30pt]
+
+\textcolor{textgray}{(See live presentation for interactive demo)}
+\end{center}
+\end{frame}
+
+% Slide 10: Key Takeaways
+\begin{frame}
+\frametitle{Key Takeaways}
+
+\begin{columns}[T]
+\begin{column}{0.48\textwidth}
+\textcolor{chyellow}{\large $\lightning$ Choose ClickHouse}\\[10pt]
+\begin{itemize}
+\item JOINs \& subqueries needed
+\item Normalized data models
+\item SQL compatibility (BI tools)
+\item Storage efficiency critical
+\item High-volume batch ingestion
+\end{itemize}
+\end{column}
+
+\begin{column}{0.48\textwidth}
+\textcolor{esteal}{\large $\mathcal{Q}$ Choose Elasticsearch}\\[10pt]
+\begin{itemize}
+\item Full-text search (fuzzy, synonyms)
+\item Denormalized data
+\item Real-time document updates
+\item Repetitive query patterns
+\item Kibana ecosystem
+\end{itemize}
+\end{column}
+\end{columns}
+
+\vspace{15pt}
+\centering
+\fbox{\textcolor{chyellow}{\textbf{Query pattern matters more than data size}}}
+\end{frame}
+
+% Slide 11: Conclusions
+\begin{frame}
+\frametitle{Conclusions}
+
+\begin{center}
+\begin{columns}[c]
+\begin{column}{0.3\textwidth}
+\centering
+\textcolor{chyellow}{\Huge 8-24x}\\[5pt]
+\textcolor{textgray}{ES faster on queries}
+\end{column}
+
+\begin{column}{0.3\textwidth}
+\centering
+\textcolor{chyellow}{\Huge 3}\\[5pt]
+\textcolor{textgray}{Operations ES can't do}
+\end{column}
+
+\begin{column}{0.3\textwidth}
+\centering
+\textcolor{chyellow}{\Huge 23x}\\[5pt]
+\textcolor{textgray}{CH faster ingestion}
+\end{column}
+\end{columns}
+
+\vspace{25pt}
+{\Large There's no universal winner}\\[10pt]
+\textcolor{textlight}{Architecture determines capability, not just performance}\\[25pt]
+
+\textcolor{chyellow}{\Large Thank you! Questions?}
+\end{center}
+\end{frame}
+
+\end{document}
