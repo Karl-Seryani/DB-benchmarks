@@ -14,9 +14,9 @@ ENV/
 *.egg-info/
 .pytest_cache/
 
-# Data files (large)
-datasets/
-results/
+# Data files - now tracked with Git LFS
+# datasets/
+# results/
 
 # Node
 node_modules/

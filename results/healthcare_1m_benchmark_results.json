@@ -1,0 +1,361 @@
+{
+  "dataset": "healthcare_1m",
+  "timestamp": "2025-12-01T02:44:46.371566",
+  "config": {
+    "warmup_runs": 2,
+    "measured_runs": 5
+  },
+  "benchmarks": {
+    "query": {
+      "simple_aggregation": {
+        "name": "Simple Aggregation",
+        "description": "COUNT and AVG cost grouped by department",
+        "category": "query",
+        "clickhouse": {
+          "avg_time": 74.09505844116211,
+          "min_time": 71.94900512695312,
+          "max_time": 79.05793190002441,
+          "std_dev": 3.0836778572816352,
+          "runs": 5,
+          "warmup_runs": 2,
+          "query": "\n                SELECT\n                    department,\n                    COUNT(*) as event_count,\n                    AVG(cost_usd) as avg_cost\n                FROM healthcare_1m.medical_events\n                GROUP BY department\n                ORDER BY event_count DESC\n            ",
+          "row_count": 15
+        },
+        "elasticsearch": {
+          "avg_time": 32.92217254638672,
+          "min_time": 32.015085220336914,
+          "max_time": 33.74886512756348,
+          "std_dev": 0.8330616150942404,
+          "runs": 5,
+          "warmup_runs": 2,
+          "query": {
+            "size": 0,
+            "aggs": {
+              "by_department": {
+                "terms": {
+                  "field": "department",
+                  "size": 20,
+                  "order": {
+                    "_count": "desc"
+                  }
+                },
+                "aggs": {
+                  "avg_cost": {
+                    "avg": {
+                      "field": "cost_usd"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "hits": 10000
+        },
+        "winner": "elasticsearch",
+        "speedup": 2.250612663449339,
+        "why_compared": "Basic OLAP operation - tests aggregation performance"
+      },
+      "time_series": {
+        "name": "Time-Series Analysis",
+        "description": "Daily aggregation with date bucketing (last 30 days)",
+        "category": "query",
+        "clickhouse": {
+          "avg_time": 71.31056785583496,
+          "min_time": 69.12899017333984,
+          "max_time": 72.77107238769531,
+          "std_dev": 1.3944918791408976,
+          "runs": 5,
+          "warmup_runs": 2,
+          "query": "\n                SELECT\n                    toDate(timestamp) as date,\n                    COUNT(*) as event_count,\n                    SUM(cost_usd) as daily_revenue\n                FROM healthcare_1m.medical_events\n                GROUP BY date\n                ORDER BY date DESC\n                LIMIT 30\n            ",
+          "row_count": 30
+        },
+        "elasticsearch": {
+          "avg_time": 50.92453956604004,
+          "min_time": 49.29399490356445,
+          "max_time": 53.22694778442383,
+          "std_dev": 1.722409271802409,
+          "runs": 5,
+          "warmup_runs": 2,
+          "query": {
+            "size": 0,
+            "aggs": {
+              "by_date": {
+                "date_histogram": {
+                  "field": "timestamp",
+                  "calendar_interval": "day",
+                  "order": {
+                    "_key": "desc"
+                  }
+                },
+                "aggs": {
+                  "daily_revenue": {
+                    "sum": {
+                      "field": "cost_usd"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "hits": 10000
+        },
+        "winner": "elasticsearch",
+        "speedup": 1.4003183624931528,
+        "why_compared": "Common time-series pattern - tests date handling"
+      },
+      "fulltext_search": {
+        "name": "Full-Text Search",
+        "description": "Search for \"Surgery\" or \"Emergency\" events",
+        "category": "query",
+        "clickhouse": {
+          "avg_time": 73.8741397857666,
+          "min_time": 72.18313217163086,
+          "max_time": 79.53572273254395,
+          "std_dev": 3.1690156307859683,
+          "runs": 5,
+          "warmup_runs": 2,
+          "query": "\n                SELECT\n                    event_type,\n                    COUNT(*) as match_count\n                FROM healthcare_1m.medical_events\n                WHERE event_type LIKE '%Surgery%' OR event_type LIKE '%Emergency%'\n                GROUP BY event_type\n                ORDER BY match_count DESC\n            ",
+          "row_count": 2
+        },
+        "elasticsearch": {
+          "avg_time": 38.10067176818848,
+          "min_time": 31.91399574279785,
+          "max_time": 55.10115623474121,
+          "std_dev": 9.689976965350105,
+          "runs": 5,
+          "warmup_runs": 2,
+          "query": {
+            "size": 0,
+            "query": {
+              "bool": {
+                "should": [
+                  {
+                    "match": {
+                      "event_type": "Surgery"
+                    }
+                  },
+                  {
+                    "match": {
+                      "event_type": "Emergency"
+                    }
+                  }
+                ]
+              }
+            },
+            "aggs": {
+              "by_event_type": {
+                "terms": {
+                  "field": "event_type",
+                  "size": 20
+                }
+              }
+            }
+          },
+          "hits": 10000
+        },
+        "winner": "elasticsearch",
+        "speedup": 1.9389196136811055,
+        "why_compared": "ES designed for this - inverted index vs LIKE scan",
+        "note": "ES uses inverted index (optimized), CH uses LIKE scan (not optimized)"
+      },
+      "top_n": {
+        "name": "Top-N Query",
+        "description": "Find top 10 highest-cost events",
+        "category": "query",
+        "clickhouse": {
+          "avg_time": 72.37615585327148,
+          "min_time": 70.79219818115234,
+          "max_time": 73.65775108337402,
+          "std_dev": 1.1190959548522446,
+          "runs": 5,
+          "warmup_runs": 2,
+          "query": "\n                SELECT\n                    event_id,\n                    patient_id,\n                    department,\n                    cost_usd\n                FROM healthcare_1m.medical_events\n                ORDER BY cost_usd DESC\n                LIMIT 10\n            ",
+          "row_count": 10
+        },
+        "elasticsearch": {
+          "avg_time": 36.873817443847656,
+          "min_time": 36.089181900024414,
+          "max_time": 38.574934005737305,
+          "std_dev": 1.027914959812788,
+          "runs": 5,
+          "warmup_runs": 2,
+          "query": {
+            "size": 10,
+            "sort": [
+              {
+                "cost_usd": "desc"
+              }
+            ],
+            "_source": [
+              "event_id",
+              "patient_id",
+              "department",
+              "cost_usd"
+            ]
+          },
+          "hits": 10000
+        },
+        "winner": "elasticsearch",
+        "speedup": 1.9628061554377343,
+        "why_compared": "Common pattern - tests sorting and limiting"
+      },
+      "multi_metric": {
+        "name": "Multi-Metric Dashboard",
+        "description": "Department dashboard with 6 metrics (COUNT, unique patients, revenue, avg cost, avg duration, critical cases)",
+        "category": "query",
+        "clickhouse": {
+          "avg_time": 87.86301612854004,
+          "min_time": 85.43109893798828,
+          "max_time": 90.97123146057129,
+          "std_dev": 2.1421854099230075,
+          "runs": 5,
+          "warmup_runs": 2,
+          "query": "\n                SELECT\n                    department,\n                    COUNT(*) as total_events,\n                    COUNT(DISTINCT patient_id) as unique_patients,\n                    SUM(cost_usd) as total_revenue,\n                    AVG(cost_usd) as avg_cost,\n                    AVG(duration_minutes) as avg_duration,\n                    SUM(CASE WHEN severity = 'Critical' THEN 1 ELSE 0 END) as critical_cases\n                FROM healthcare_1m.medical_events\n                GROUP BY department\n                ORDER BY total_revenue DESC\n            ",
+          "row_count": 15
+        },
+        "elasticsearch": {
+          "avg_time": 75.36683082580566,
+          "min_time": 70.49417495727539,
+          "max_time": 80.22332191467285,
+          "std_dev": 4.469060777883953,
+          "runs": 5,
+          "warmup_runs": 2,
+          "query": {
+            "size": 0,
+            "aggs": {
+              "by_department": {
+                "terms": {
+                  "field": "department",
+                  "size": 20,
+                  "order": {
+                    "total_revenue": "desc"
+                  }
+                },
+                "aggs": {
+                  "unique_patients": {
+                    "cardinality": {
+                      "field": "patient_id"
+                    }
+                  },
+                  "total_revenue": {
+                    "sum": {
+                      "field": "cost_usd"
+                    }
+                  },
+                  "avg_cost": {
+                    "avg": {
+                      "field": "cost_usd"
+                    }
+                  },
+                  "avg_duration": {
+                    "avg": {
+                      "field": "duration_minutes"
+                    }
+                  },
+                  "critical_cases": {
+                    "filter": {
+                      "term": {
+                        "severity": "Critical"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "hits": 10000
+        },
+        "winner": "elasticsearch",
+        "speedup": 1.1658048396862626,
+        "why_compared": "Complex aggregation - tests multi-metric performance"
+      }
+    },
+    "capability": {
+      "patient_event_join": {
+        "name": "Patient-Event JOIN",
+        "description": "Join patients with their medical events by condition and insurance",
+        "category": "capability",
+        "clickhouse": {
+          "avg_time": 94.20437812805176,
+          "min_time": 92.41104125976562,
+          "max_time": 95.37100791931152,
+          "std_dev": 1.325972525194086,
+          "runs": 5,
+          "warmup_runs": 2,
+          "query": "\n                SELECT\n                    p.primary_condition,\n                    p.insurance_type,\n                    COUNT(*) as event_count,\n                    AVG(e.cost_usd) as avg_cost,\n                    SUM(e.cost_usd) as total_cost\n                FROM healthcare_1m.patients p\n                JOIN healthcare_1m.medical_events e ON p.patient_id = e.patient_id\n                GROUP BY p.primary_condition, p.insurance_type\n                ORDER BY total_cost DESC\n                LIMIT 20\n            ",
+          "row_count": 20
+        },
+        "elasticsearch": {
+          "avg_time": null,
+          "not_possible": true,
+          "limitation": "Elasticsearch cannot perform JOINs. Apps must denormalize data (duplicating storage) or run multiple queries and join in application code (slower, more complex)."
+        },
+        "winner": "clickhouse",
+        "speedup": null,
+        "es_limitation": "Elasticsearch cannot perform JOINs. Apps must denormalize data (duplicating storage) or run multiple queries and join in application code (slower, more complex).",
+        "es_not_possible": true,
+        "why_compared": "Healthcare apps need JOINs constantly"
+      },
+      "cost_by_condition": {
+        "name": "Cost by Condition",
+        "description": "Total healthcare cost per patient condition (requires JOIN)",
+        "category": "capability",
+        "clickhouse": {
+          "avg_time": 92.85573959350586,
+          "min_time": 89.30587768554688,
+          "max_time": 97.28288650512695,
+          "std_dev": 3.3824409172735166,
+          "runs": 5,
+          "warmup_runs": 2,
+          "query": "\n                SELECT\n                    p.primary_condition,\n                    COUNT(DISTINCT p.patient_id) as patient_count,\n                    COUNT(*) as event_count,\n                    SUM(e.cost_usd) as total_cost,\n                    AVG(e.cost_usd) as avg_cost_per_event\n                FROM healthcare_1m.patients p\n                JOIN healthcare_1m.medical_events e ON p.patient_id = e.patient_id\n                GROUP BY p.primary_condition\n                ORDER BY total_cost DESC\n            ",
+          "row_count": 15
+        },
+        "elasticsearch": {
+          "avg_time": null,
+          "not_possible": true,
+          "limitation": "Elasticsearch cannot join patient conditions with event costs. This is why mpathic switched - their data scientists needed this for ML experiments."
+        },
+        "winner": "clickhouse",
+        "speedup": null,
+        "es_limitation": "Elasticsearch cannot join patient conditions with event costs. This is why mpathic switched - their data scientists needed this for ML experiments.",
+        "es_not_possible": true,
+        "why_compared": "Critical for healthcare cost analysis - mpathic use case"
+      },
+      "anomaly_detection": {
+        "name": "Anomaly Detection",
+        "description": "Find events with cost above average (subquery)",
+        "category": "capability",
+        "clickhouse": {
+          "avg_time": 81.18734359741211,
+          "min_time": 77.98480987548828,
+          "max_time": 83.84394645690918,
+          "std_dev": 2.51729860859923,
+          "runs": 5,
+          "warmup_runs": 2,
+          "query": "\n                SELECT\n                    department,\n                    severity,\n                    COUNT(*) as high_cost_events,\n                    AVG(cost_usd) as avg_high_cost\n                FROM healthcare_1m.medical_events\n                WHERE cost_usd > (\n                    SELECT AVG(cost_usd) FROM healthcare_1m.medical_events\n                )\n                GROUP BY department, severity\n                ORDER BY high_cost_events DESC\n            ",
+          "row_count": 60
+        },
+        "elasticsearch": {
+          "avg_time": null,
+          "not_possible": true,
+          "limitation": "Elasticsearch cannot execute subqueries. To find above-average events: 1) Query to get average, 2) Second query with that value. Doubles latency, complicates code."
+        },
+        "winner": "clickhouse",
+        "speedup": null,
+        "es_limitation": "Elasticsearch cannot execute subqueries. To find above-average events: 1) Query to get average, 2) Second query with that value. Doubles latency, complicates code.",
+        "es_not_possible": true,
+        "why_compared": "Common analytics pattern - requires subquery support"
+      }
+    }
+  },
+  "summary": {
+    "query": {
+      "clickhouse_wins": 0,
+      "elasticsearch_wins": 5
+    },
+    "capability": {
+      "clickhouse_wins": 0,
+      "es_not_possible": 3
+    }
+  }
+}
